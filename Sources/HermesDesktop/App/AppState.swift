@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -32,6 +33,7 @@ final class AppState: ObservableObject {
     private let sessionPageSize = 50
     private var sessionOffset = 0
     private var statusTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         let paths = AppPaths()
@@ -44,6 +46,12 @@ final class AppState: ObservableObject {
         self.fileEditorService = FileEditorService(sshTransport: sshTransport)
         self.sessionBrowserService = SessionBrowserService(sshTransport: sshTransport)
         self.terminalWorkspace = TerminalWorkspaceStore(sshTransport: sshTransport)
+
+        connectionStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
 
         self.activeConnectionID = connectionStore.lastConnectionID
 

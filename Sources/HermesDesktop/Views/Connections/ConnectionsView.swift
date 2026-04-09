@@ -4,6 +4,7 @@ struct ConnectionsView: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var editingConnection = ConnectionProfile()
+    @State private var editorPresentationID = UUID()
     @State private var isPresentingEditor = false
     @State private var editingExistingConnection = false
 
@@ -21,9 +22,7 @@ struct ConnectionsView: View {
                 Spacer()
 
                 Button {
-                    editingConnection = ConnectionProfile()
-                    editingExistingConnection = false
-                    isPresentingEditor = true
+                    presentEditor(for: ConnectionProfile(), isEditing: false)
                 } label: {
                     Label("New Host", systemImage: "plus")
                 }
@@ -45,9 +44,7 @@ struct ConnectionsView: View {
                             onConnect: { appState.connect(to: connection) },
                             onTest: { appState.testConnection(connection) },
                             onEdit: {
-                                editingConnection = connection
-                                editingExistingConnection = true
-                                isPresentingEditor = true
+                                presentEditor(for: connection, isEditing: true)
                             },
                             onDelete: { appState.deleteConnection(connection) }
                         )
@@ -76,7 +73,15 @@ struct ConnectionsView: View {
             ) { updatedConnection in
                 appState.connectionStore.upsert(updatedConnection)
             }
+            .id(editorPresentationID)
         }
+    }
+
+    private func presentEditor(for connection: ConnectionProfile, isEditing: Bool) {
+        editingConnection = connection
+        editingExistingConnection = isEditing
+        editorPresentationID = UUID()
+        isPresentingEditor = true
     }
 }
 
