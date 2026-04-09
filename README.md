@@ -179,6 +179,7 @@ Here are concrete things you can verify yourself:
 - you can verify the downloaded app bundle locally with `codesign --verify --deep --strict /Applications/HermesDesktop.app`
 - Hermes Desktop uses direct SSH to the host you choose and does not require a gateway API; if you want to inspect its live network behavior, you can watch it with Little Snitch, LuLu, or `nettop`
 - Hermes Desktop does not require installing a helper service on the remote host; if you want to be extra cautious, test it first against a disposable or non-critical Hermes host
+- if you already use a coding agent you trust, point it at this repo and ask for an independent review of the codebase, build scripts, packaging flow, and release process
 
 One important limitation is distribution trust: the current public build is not
 notarized by Apple yet. That is why macOS may show a first-launch warning. It
