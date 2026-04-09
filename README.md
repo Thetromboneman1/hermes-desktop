@@ -168,6 +168,23 @@ gateway layer or turn it into something else.
 
 ## FAQ
 
+### Is it safe to install?
+
+That is a fair question, and you should not rely on reassurance alone.
+
+Here are concrete things you can verify yourself:
+
+- the app is open source in this repo, and you can build it locally with `./scripts/build-macos-app.sh` instead of using the release zip
+- GitHub shows a SHA-256 for the release asset, and you can compare it after download with `shasum -a 256 HermesDesktop.app.zip`
+- you can verify the downloaded app bundle locally with `codesign --verify --deep --strict /Applications/HermesDesktop.app`
+- Hermes Desktop uses direct SSH to the host you choose and does not require a gateway API; if you want to inspect its live network behavior, you can watch it with Little Snitch, LuLu, or `nettop`
+- Hermes Desktop does not require installing a helper service on the remote host; if you want to be extra cautious, test it first against a disposable or non-critical Hermes host
+
+One important limitation is distribution trust: the current public build is not
+notarized by Apple yet. That is why macOS may show a first-launch warning. It
+is a real friction point, and it is different from Apple actively reporting
+that it found malware in the app.
+
 ### Why can't I browse every file the agent creates on the host?
 
 On purpose. Hermes Desktop is not trying to become a remote file manager or a
