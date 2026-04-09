@@ -5,9 +5,6 @@ Native macOS app for Hermes over SSH.
 Hermes Desktop gives you the parts of Hermes that matter most on a Mac:
 sessions, memories, and a real terminal. In one clean place. 
 
-<img width="1301" height="802" alt="Screenshot 2026-04-09 alle 14 04 22" src="https://github.com/user-attachments/assets/42c91c5f-51f4-4c6d-b43b-61948ec552c1" />
-
-
 It stays deliberately simple:
 
 - connects directly over SSH
@@ -41,13 +38,15 @@ Works with:
 
 You need only a few things:
 
+- an Apple Silicon Mac for the current public release build
 - macOS 14 or newer
-- SSH access that already works from Terminal
+- SSH access that already works from Terminal without password prompts
+- the SSH host key already accepted once in Terminal for that target
 - `python3` available on the Hermes host
 - Hermes data under the remote user's `~/.hermes`
 
 Simple rule:
-if this works in Terminal, the app is usually ready to work too:
+if this works in Terminal without asking for a password, the app is usually ready to work too:
 
 ```bash
 ssh your-host
@@ -60,12 +59,15 @@ ssh your-host
 3. Drag `HermesDesktop.app` into `Applications`.
 4. Open it.
 
+The current public build is Apple Silicon only and not notarized yet.
+
 If macOS blocks the first launch, right click the app and choose `Open` once.
+If needed, use `Privacy & Security` -> `Open Anyway`.
 
 ## Connect Your Hermes Host
 
 Open the app, go to `Connections`, create a profile, then click `Test` and
-`Connect`.
+`Use Host`.
 
 You have two valid ways to fill the connection:
 
@@ -128,10 +130,10 @@ Hermes Desktop still connects over SSH and never reads those files directly.
 It checks that:
 
 - the SSH target is reachable
-- authentication works
+- authentication works without interactive prompts
 - `python3` is available in the remote SSH environment used by the app
 
-If `Test` passes, `Connect` should be on solid ground.
+If `Test` passes, `Use Host` should be on solid ground.
 
 ## What You Will See In The App
 
@@ -153,6 +155,40 @@ Hermes Desktop keeps that direct path visible and usable: real SSH, real
 terminal, real remote files. It does not try to hide Hermes behind a separate
 gateway layer or turn it into something else.
 
+## FAQ
+
+### Why can't I browse every file the agent creates on the host?
+
+On purpose. Hermes Desktop is not trying to become a remote file manager or a
+full remote IDE. We wanted the app to stay focused on the Hermes flow that
+matters most on Mac: sessions, memories, and terminal work.
+
+If you need full filesystem access, there are already better tools for it:
+your normal SSH shell, SFTP apps, or remote editors. Keeping the in-app file
+surface narrow also avoids encouraging people to casually open arbitrary
+agent-generated files they have not reviewed yet. It is a product choice first,
+and a safer default second, not a hard security boundary.
+
+### Why do I still need SSH working in Terminal first?
+
+Because the app does not replace SSH. It depends on the same connection path
+your Mac already uses. If Terminal still needs passwords, host key
+confirmation, or other interactive fixes, the app will usually hit the same
+wall.
+
+### Why doesn't the app mirror Hermes files onto my Mac?
+
+Because the remote Hermes host stays the source of truth. Once the app starts
+caching or syncing copies locally, you introduce stale state, conflict
+handling, and harder-to-explain behavior. The current design keeps reads and
+edits attached to the real remote files.
+
+### Why are sessions read from `~/.hermes/state.db` first?
+
+Because that is the canonical Hermes session store. Reading it gives the app
+the same view Hermes itself uses. `~/.hermes/sessions/*.jsonl` exists as a
+fallback only when the SQLite store is not available.
+
 ## Roadmap
 
 This is the current direction for the next waves of work:
@@ -167,13 +203,16 @@ This is the current direction for the next waves of work:
 
 ## Build From Source
 
-For local development:
+For local development, the supported path in this repo is to build the app
+bundle directly:
 
 ```bash
-swift run HermesDesktop
+./scripts/build-macos-app.sh
 ```
 
-To build the Mac app bundle:
+Then open `dist/HermesDesktop.app`.
+
+To create the Mac app bundle again:
 
 ```bash
 ./scripts/build-macos-app.sh
@@ -187,4 +226,4 @@ To create the GitHub Releases archive:
 
 Release artifact:
 
-- `dist/HermesDesktop.app.zip`
+- `dist/HermesDesktop.app.zip` for Apple Silicon Macs

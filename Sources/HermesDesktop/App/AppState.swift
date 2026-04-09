@@ -183,7 +183,6 @@ final class AppState: ObservableObject {
             isBusy = true
             overviewError = nil
             overview = try await remoteHermesService.discover(connection: profile)
-            setStatusMessage("Discovery refreshed")
             isBusy = false
         } catch {
             isBusy = false

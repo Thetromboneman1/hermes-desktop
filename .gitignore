@@ -15,3 +15,10 @@ DerivedData/
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
 .docs
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.cer
+*.crt

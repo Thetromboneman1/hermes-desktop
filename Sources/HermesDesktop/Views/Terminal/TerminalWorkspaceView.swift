@@ -22,6 +22,7 @@ struct TerminalWorkspaceView: View {
                     } label: {
                         Label("New Tab", systemImage: "plus")
                     }
+                    .buttonStyle(.borderedProminent)
                 }
 
                 Spacer()

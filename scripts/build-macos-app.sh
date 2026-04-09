@@ -15,6 +15,7 @@ ICON_SOURCE="$ROOT_DIR/packaging/AppIcon-1024.png"
 ICONSET_PATH="$ROOT_DIR/packaging/AppIcon.iconset"
 ICNS_PATH="$ROOT_DIR/packaging/HermesDesktop.icns"
 PLIST_PATH="$ROOT_DIR/packaging/Info.plist"
+SHADER_SOURCE_PATH="$ROOT_DIR/Vendor/SwiftTerm/Sources/SwiftTerm/Apple/Metal/Shaders.metal"
 
 mkdir -p \
     "$ROOT_DIR/dist" \
@@ -100,15 +101,14 @@ env "${BUILD_ENV[@]}" swift "${SWIFT_FLAGS[@]}"
 
 BIN_DIR="$(env "${BUILD_ENV[@]}" swift "${SWIFT_FLAGS[@]}" --show-bin-path)"
 EXECUTABLE_PATH="$BIN_DIR/$APP_NAME"
-RESOURCE_BUNDLE_PATH="$BIN_DIR/SwiftTerm_SwiftTerm.bundle"
 
 if [[ ! -x "$EXECUTABLE_PATH" ]]; then
     echo "error: expected executable not found at $EXECUTABLE_PATH" >&2
     exit 1
 fi
 
-if [[ ! -d "$RESOURCE_BUNDLE_PATH" ]]; then
-    echo "error: expected SwiftTerm resource bundle not found at $RESOURCE_BUNDLE_PATH" >&2
+if [[ ! -f "$SHADER_SOURCE_PATH" ]]; then
+    echo "error: expected SwiftTerm shader source not found at $SHADER_SOURCE_PATH" >&2
     exit 1
 fi
 
@@ -120,9 +120,11 @@ mkdir -p "$MACOS_PATH" "$RESOURCES_PATH"
 cp "$EXECUTABLE_PATH" "$MACOS_PATH/$APP_NAME"
 cp "$PLIST_PATH" "$CONTENTS_PATH/Info.plist"
 cp "$ICNS_PATH" "$RESOURCES_PATH/AppIcon.icns"
-cp -R "$RESOURCE_BUNDLE_PATH" "$BUNDLE_PATH/"
+cp "$SHADER_SOURCE_PATH" "$RESOURCES_PATH/Shaders.metal"
+codesign --force --deep --sign - "$BUNDLE_PATH" >/dev/null
+codesign --verify --deep --strict "$BUNDLE_PATH" >/dev/null
 
 echo
 echo "App bundle created:"
 echo "  $BUNDLE_PATH"
-echo "Unsigned bundle: macOS may require right-click > Open on first launch."
+echo "Ad-hoc signed bundle created: macOS may still require right-click > Open on first launch."

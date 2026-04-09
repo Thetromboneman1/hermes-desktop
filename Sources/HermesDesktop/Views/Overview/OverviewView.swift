@@ -51,9 +51,11 @@ struct OverviewView: View {
             Spacer(minLength: 16)
 
             Button {
-                appState.reconnectActiveConnection()
+                Task {
+                    await appState.refreshOverview()
+                }
             } label: {
-                Label("Reconnect", systemImage: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.borderedProminent)
         }

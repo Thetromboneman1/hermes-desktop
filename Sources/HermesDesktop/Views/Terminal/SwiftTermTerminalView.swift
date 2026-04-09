@@ -72,7 +72,9 @@ struct SwiftTermTerminalView: NSViewRepresentable {
         }
 
         func terminateProcess() {
-            terminalView?.terminate()
+            Task { @MainActor [weak terminalView] in
+                terminalView?.terminate()
+            }
         }
 
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
