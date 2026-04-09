@@ -1355,8 +1355,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     }
     
     open func linefeed(source: Terminal) {
-        // Preserve manual selection while output is streaming when mouse reporting is disabled.
-        if allowMouseReporting {
+        // Only clear selection when the remote app is actively consuming mouse events.
+        if shouldClearSelectionOnTerminalOutput {
             selection.selectNone()
             disableSelectionPanGesture()
         }

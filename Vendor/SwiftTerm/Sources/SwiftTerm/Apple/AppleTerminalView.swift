@@ -85,6 +85,10 @@ struct ViewLineInfo {
 
 extension TerminalView {
     typealias CellDimension = CGSize
+
+    var shouldClearSelectionOnTerminalOutput: Bool {
+        allowMouseReporting && terminal.mouseMode != .off
+    }
     
     func resetCaches ()
     {
@@ -1899,8 +1903,8 @@ extension TerminalView {
     func feedPrepare()
     {
         search.invalidate()
-        // Preserve manual selection while output is streaming when mouse reporting is disabled.
-        if allowMouseReporting {
+        // Only clear selection when the remote app is actively consuming mouse events.
+        if shouldClearSelectionOnTerminalOutput {
             selection.active = false
         }
         startDisplayUpdates()

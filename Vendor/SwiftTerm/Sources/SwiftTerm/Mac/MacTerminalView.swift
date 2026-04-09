@@ -583,8 +583,8 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     open func linefeed(source: Terminal) {
-        // Preserve manual selection while output is streaming when mouse reporting is disabled.
-        if allowMouseReporting {
+        // Only clear selection when the remote app is actively consuming mouse events.
+        if shouldClearSelectionOnTerminalOutput {
             selection.selectNone()
         }
     }
@@ -697,7 +697,6 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     public override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
         updateScroller()
-        selection.active = false
         updateProgressBarFrame()
     }
     
@@ -1946,20 +1945,84 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     private var autoScrollDelta = 0
-    // Callback from when the mouseDown autoscrolling timer goes off
-    private func scrollingTimerElapsed (source: Timer)
-    {
-        if autoScrollDelta == 0 {
+    private var selectionAutoScrollTask: Task<(), Never>?
+
+    private func currentMouseLocationInView() -> CGPoint? {
+        guard let window else {
+            return nil
+        }
+        return convert(window.mouseLocationOutsideOfEventStream, from: nil)
+    }
+
+    private func selectionAutoScrollDelta(for point: CGPoint) -> Int {
+        if point.y > bounds.height {
+            let overflowRows = max(1, Int((point.y - bounds.height) / cellDimension.height) + 1)
+            return -calcScrollingVelocity(delta: overflowRows)
+        }
+        if point.y < 0 {
+            let overflowRows = max(1, Int((-point.y) / cellDimension.height) + 1)
+            return calcScrollingVelocity(delta: overflowRows)
+        }
+        return 0
+    }
+
+    @MainActor
+    private func startSelectionAutoScrollIfNeeded() {
+        guard selectionAutoScrollTask == nil else {
             return
         }
-        if autoScrollDelta < 0 {
-            scrollUp(lines: autoScrollDelta * -1)
-        } else {
-            scrollUp(lines: autoScrollDelta)
+        selectionAutoScrollTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                self?.performSelectionAutoScrollStep()
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
         }
+    }
+
+    private func stopSelectionAutoScroll() {
+        selectionAutoScrollTask?.cancel()
+        selectionAutoScrollTask = nil
+        autoScrollDelta = 0
+    }
+
+    @MainActor
+    private func updateSelectionAutoScroll(for point: CGPoint) {
+        autoScrollDelta = selectionAutoScrollDelta(for: point)
+        if autoScrollDelta == 0 {
+            stopSelectionAutoScroll()
+        } else {
+            startSelectionAutoScrollIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func performSelectionAutoScrollStep() {
+        guard selection.active, autoScrollDelta != 0 else {
+            stopSelectionAutoScroll()
+            return
+        }
+        guard let point = currentMouseLocationInView() else {
+            stopSelectionAutoScroll()
+            return
+        }
+
+        autoScrollDelta = selectionAutoScrollDelta(for: point)
+        guard autoScrollDelta != 0 else {
+            stopSelectionAutoScroll()
+            return
+        }
+
+        if autoScrollDelta < 0 {
+            scrollUp(lines: -autoScrollDelta)
+        } else {
+            scrollDown(lines: autoScrollDelta)
+        }
+        selection.dragExtend(bufferPosition: calculateMouseHit(at: point).grid)
+        setNeedsDisplay(bounds)
     }
     
     public override func mouseDown(with event: NSEvent) {
+        stopSelectionAutoScroll()
         if allowMouseReporting && terminal.mouseMode.sendButtonPress() {
             sharedMouseEvent(with: event)
             return
@@ -1999,6 +2062,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     var didSelectionDrag: Bool = false
     
     public override func mouseUp(with event: NSEvent) {
+        stopSelectionAutoScroll()
         let hit = calculateMouseHit(with: event).grid
         updateHoverLink(at: hit, commandOverride: commandActive || event.modifierFlags.contains(.command))
         if let result = linkForClick(at: hit, hasCommandModifier: event.modifierFlags.contains(.command)) {
@@ -2020,10 +2084,12 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     
     public override func mouseDragged(with event: NSEvent) {
         let displayBuffer = terminal.displayBuffer
+        let point = convert(event.locationInWindow, from: nil)
         let mouseHit = calculateMouseHit(with: event)
         let hit = mouseHit.grid
         if allowMouseReporting {
             if terminal.mouseMode.sendMotionEvent() {
+                stopSelectionAutoScroll()
                 let flags = encodeMouseEvent(with: event)
                 let screenRow = max (0, min (displayBuffer.rows - 1, hit.row - displayBuffer.yDisp))
                 terminal.sendMotion(buttonFlags: flags, x: hit.col, y: screenRow, pixelX: mouseHit.pixels.col, pixelY: mouseHit.pixels.row)
@@ -2031,6 +2097,7 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
                 return
             }
             if terminal.mouseMode != .off {
+                stopSelectionAutoScroll()
                 return
             }
         }
@@ -2042,14 +2109,10 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             selection.startSelection()
         }
         didSelectionDrag = true
-        autoScrollDelta = 0
-        let screenRow = hit.row - displayBuffer.yDisp
         if selection.active {
-            if screenRow <= 0 {
-                autoScrollDelta = calcScrollingVelocity(delta: screenRow * -1) * -1
-            } else if screenRow >= displayBuffer.rows {
-                autoScrollDelta = calcScrollingVelocity(delta: screenRow - displayBuffer.rows)
-            }
+            updateSelectionAutoScroll(for: point)
+        } else {
+            stopSelectionAutoScroll()
         }
         setNeedsDisplay(bounds)
     }
