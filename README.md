@@ -2,10 +2,19 @@
 
 Native macOS app for Hermes over SSH.
 
-Hermes Desktop gives you the parts of Hermes that matter most on a Mac:
-sessions, memories, and a real terminal. In one clean place. 
+Hermes Desktop is for people who already use Hermes and want it to feel at home
+on a Mac.
 
-It stays deliberately simple:
+It brings the parts of the workflow that matter most into one native window:
+sessions, canonical files, and a real terminal.
+
+If you already live in Hermes, the app should feel immediately legible: your
+host, your files, your shell.
+
+No browser wrapper. No gateway API. No local mirror that slowly drifts out of
+sync.
+
+That restraint is intentional:
 
 - connects directly over SSH
 - keeps the Hermes host as the only source of truth
@@ -13,19 +22,20 @@ It stays deliberately simple:
 - does not mirror files onto your Mac
 - does not install a helper service on the remote host
 
-That is the point of the app. It adds a polished Mac interface around the real
-Hermes workflow instead of replacing it with a heavier or more abstract layer.
+That is the point of the app. Hermes Desktop does not try to replace the real
+Hermes workflow. It makes that workflow feel faster, calmer, and more native on
+macOS without hiding how it actually works.
 
 ![Hermes Desktop Sessions view](assets/readme-preview-sessions-safe.png)
 
-Preview of the Sessions view, with recent Hermes conversations on the active
+Preview of the Sessions view, showing recent Hermes conversations on the active
 host.
 
 ## What You Get
 
-- a native Mac app, not a browser wrapper
+- a native Mac app that feels like a Mac app, not a browser wrapper
 - a real embedded SSH terminal with tabs
-- remote editing for:
+- direct editing for the canonical Hermes files:
   - `~/.hermes/memories/USER.md`
   - `~/.hermes/memories/MEMORY.md`
   - `~/.hermes/SOUL.md`
@@ -33,7 +43,8 @@ host.
 - fallback to `~/.hermes/sessions/*.jsonl` only if the SQLite store is not
   available
 
-Works with:
+If Hermes runs there and SSH already works, Hermes Desktop will usually meet you
+there. That includes:
 
 - Raspberry Pi
 - another Mac
@@ -42,23 +53,28 @@ Works with:
 
 ## Before You Download
 
-You need only a few things:
+Setup is intentionally lightweight. You need only a few things:
 
 - an Apple Silicon Mac for the current public release build
 - macOS 14 or newer
-- SSH access that already works from Terminal without password prompts
+- SSH access from this Mac that already works in Terminal without interactive prompts
 - the SSH host key already accepted once in Terminal for that target
+- a normal route from this Mac to the Hermes host, such as local LAN, public IP/DNS, VPN, or a Tailscale IP/hostname
 - `python3` available on the Hermes host
 - Hermes data under the remote user's `~/.hermes`
 
 Simple rule:
-if this works in Terminal without asking for a password, the app is usually ready to work too:
+if this works in Terminal from this Mac without asking for a password or host
+key confirmation, the app is usually
+ready to work too:
 
 ```bash
 ssh your-host
 ```
 
 ## Install
+
+Install takes about a minute:
 
 1. Download `HermesDesktop.app.zip` from GitHub Releases.
 2. Double click the zip.
@@ -81,7 +97,8 @@ If macOS blocks the first launch:
 Open the app, go to `Connections`, create a profile, then click `Test` and
 `Use Host`.
 
-You have two valid ways to fill the connection:
+You have two valid ways to fill the connection. In most cases, an SSH alias is
+the cleanest one:
 
 ### Option 1: SSH alias
 
@@ -137,7 +154,7 @@ Hermes Desktop still connects over SSH and never reads those files directly.
 
 ## What `Test` Checks
 
-`Test` is not a cosmetic button.
+`Test` is the preflight, not a cosmetic button.
 
 It checks that:
 
@@ -163,15 +180,20 @@ If `Test` passes, `Use Host` should be on solid ground.
 
 Hermes is strongest at the command line.
 
-Hermes Desktop keeps that direct path visible and usable: real SSH, real
-terminal, real remote files. It does not try to hide Hermes behind a separate
-gateway layer or turn it into something else.
+Hermes Desktop respects that. It keeps the real path visible and usable: real
+SSH, real terminal, real remote files, real session data.
+
+It does not try to hide Hermes behind a separate gateway layer, invent a second
+source of truth, or turn the workflow into something softer and less reliable.
+The goal is not to abstract Hermes away. The goal is to give it a native Mac
+surface that still feels honest.
 
 ## FAQ
 
 ### Is it safe to install?
 
-That is a fair question, and you should not rely on reassurance alone.
+That is exactly the right question, and you should not rely on reassurance
+alone.
 
 Here are concrete things you can verify yourself:
 
@@ -182,10 +204,10 @@ Here are concrete things you can verify yourself:
 - Hermes Desktop does not require installing a helper service on the remote host; if you want to be extra cautious, test it first against a disposable or non-critical Hermes host
 - if you already use a coding agent you trust, point it at this repo and ask for an independent review of the codebase, build scripts, packaging flow, and release process
 
-One important limitation is distribution trust: the current public build is not
-notarized by Apple yet. That is why macOS may show a first-launch warning. It
-is a real friction point, and it is different from Apple actively reporting
-that it found malware in the app.
+One important limitation today is distribution trust: the current public build
+is not notarized by Apple yet. That is why macOS may show a first-launch
+warning. It is a real friction point, and it is different from Apple actively
+reporting that it found malware in the app.
 
 ### Why can't I browse every file the agent creates on the host?
 
@@ -201,10 +223,35 @@ and a safer default second, not a hard security boundary.
 
 ### Why do I still need SSH working in Terminal first?
 
-Because the app does not replace SSH. It depends on the same connection path
-your Mac already uses. If Terminal still needs passwords, host key
-confirmation, or other interactive fixes, the app will usually hit the same
-wall.
+Because the app does not replace SSH. It uses the same connection path your Mac
+already uses, but in a non-interactive way.
+
+If Terminal still needs password entry, host key confirmation, or other
+interactive fixes for that target, the app will usually hit the same wall.
+
+The important distinction is this: the remote host may still allow password
+login in general, but Hermes Desktop works best when this Mac can complete the
+SSH connection without prompts.
+
+### Does my Mac need to be on the same Wi-Fi or local network as the Hermes host?
+
+No.
+
+Your Mac just needs a normal SSH route to the host from wherever it is. That
+can be:
+
+- the same local network
+- a public IP or DNS name
+- a VPN
+- a Tailscale IP or MagicDNS hostname
+
+If `ssh your-host` works from this Mac, Hermes Desktop can usually use that
+same path too.
+
+One important nuance: Hermes Desktop uses standard `/usr/bin/ssh`. So if your
+setup works only through the separate `tailscale ssh` command and not through
+normal `ssh`, that is a different setup and may not behave the same way inside
+the app.
 
 ### Why doesn't the app mirror Hermes files onto my Mac?
 
@@ -221,7 +268,7 @@ fallback only when the SQLite store is not available.
 
 ## Roadmap
 
-This is the current direction for the next waves of work:
+This is the direction from here:
 
 ### Recently Shipped
 

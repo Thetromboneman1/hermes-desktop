@@ -105,7 +105,12 @@ struct ConnectionEditorSheet: View {
 
                             ConnectionHintRow(
                                 title: "Authentication",
-                                detail: "SSH must already work without interactive password prompts. Hermes Desktop expects keys, an SSH agent, or another non-interactive SSH setup."
+                                detail: "SSH must already work from this Mac without interactive prompts. Password login may still exist on the host, but Hermes Desktop expects keys, an SSH agent, or another non-interactive SSH path for the actual connection it uses."
+                            )
+
+                            ConnectionHintRow(
+                                title: "Network path",
+                                detail: "The Mac and Hermes host do not need to be on the same Wi-Fi. Local network, public IP, VPN, or Tailscale all work as long as standard ssh from this Mac reaches the host."
                             )
 
                             if draft.trimmedAlias != nil && draft.trimmedHost != nil {

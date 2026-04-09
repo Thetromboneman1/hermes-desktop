@@ -121,7 +121,11 @@ struct ConnectionsView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
 
-                        Text("Profiles work best when SSH is already non-interactive: keys, SSH agent, and a host key already accepted once in Terminal.")
+                        Text("Profiles work best when SSH already works from this Mac without prompts. Password login may still exist on the host, but the app expects a non-interactive SSH path such as keys or ssh-agent.")
+                            .font(.subheadline)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("The Mac and Hermes host do not need to share the same Wi-Fi. What matters is that normal ssh from this Mac can reach the host over LAN, public IP, VPN, or Tailscale.")
                             .font(.subheadline)
                             .fixedSize(horizontal: false, vertical: true)
                     }
