@@ -1,0 +1,128 @@
+#!/bin/bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_NAME="HermesDesktop"
+APP_DISPLAY_NAME="Hermes Desktop"
+BUNDLE_PATH="$ROOT_DIR/dist/${APP_NAME}.app"
+CONTENTS_PATH="$BUNDLE_PATH/Contents"
+MACOS_PATH="$CONTENTS_PATH/MacOS"
+RESOURCES_PATH="$CONTENTS_PATH/Resources"
+SWIFTPM_HOME="$ROOT_DIR/.swiftpm-home"
+SCRATCH_PATH="$ROOT_DIR/.build"
+ICON_SOURCE="$ROOT_DIR/packaging/AppIcon-1024.png"
+ICONSET_PATH="$ROOT_DIR/packaging/AppIcon.iconset"
+ICNS_PATH="$ROOT_DIR/packaging/HermesDesktop.icns"
+PLIST_PATH="$ROOT_DIR/packaging/Info.plist"
+
+mkdir -p \
+    "$ROOT_DIR/dist" \
+    "$SWIFTPM_HOME/cache" \
+    "$SWIFTPM_HOME/configuration" \
+    "$SWIFTPM_HOME/security" \
+    "$SWIFTPM_HOME/module-cache"
+
+pick_sdk() {
+    if [[ -n "${SDKROOT:-}" && -d "${SDKROOT}" ]]; then
+        printf '%s\n' "$SDKROOT"
+        return
+    fi
+
+    local developer_dir
+    developer_dir="$(xcode-select -p 2>/dev/null || true)"
+    if [[ -n "$developer_dir" && "$developer_dir" != "/Library/Developer/CommandLineTools" ]]; then
+        xcrun --show-sdk-path
+        return
+    fi
+
+    local clt_sdks="/Library/Developer/CommandLineTools/SDKs"
+    local selected=""
+
+    if [[ -d "$clt_sdks" ]]; then
+        selected="$(ls -d "$clt_sdks"/MacOSX15.[0-9]*.sdk 2>/dev/null | sort | tail -n 1 || true)"
+        if [[ -z "$selected" ]]; then
+            selected="$(ls -d "$clt_sdks"/MacOSX15*.sdk 2>/dev/null | grep -v 'MacOSX15.sdk$' | sort | tail -n 1 || true)"
+        fi
+        if [[ -z "$selected" ]]; then
+            selected="$(ls -d "$clt_sdks"/MacOSX*.sdk 2>/dev/null | grep -v 'MacOSX26' | sort | tail -n 1 || true)"
+        fi
+    fi
+
+    if [[ -z "$selected" ]]; then
+        selected="$(xcrun --show-sdk-path)"
+    fi
+
+    printf '%s\n' "$selected"
+}
+
+generate_icon() {
+    mkdir -p "$ICONSET_PATH"
+
+    if [[ ! -f "$ICON_SOURCE" ]]; then
+        env "${BUILD_ENV[@]}" swift "$ROOT_DIR/scripts/generate-app-icon.swift" "$ICON_SOURCE"
+    fi
+
+    sips -z 16 16 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_16x16.png" >/dev/null
+    sips -z 32 32 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_16x16@2x.png" >/dev/null
+    sips -z 32 32 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_32x32.png" >/dev/null
+    sips -z 64 64 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_32x32@2x.png" >/dev/null
+    sips -z 128 128 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_128x128.png" >/dev/null
+    sips -z 256 256 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_128x128@2x.png" >/dev/null
+    sips -z 256 256 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_256x256.png" >/dev/null
+    sips -z 512 512 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_256x256@2x.png" >/dev/null
+    sips -z 512 512 "$ICON_SOURCE" --out "$ICONSET_PATH/icon_512x512.png" >/dev/null
+    cp "$ICON_SOURCE" "$ICONSET_PATH/icon_512x512@2x.png"
+
+    env "${BUILD_ENV[@]}" swift "$ROOT_DIR/scripts/build-icns.swift" "$ICONSET_PATH" "$ICNS_PATH"
+    iconutil -c iconset "$ICNS_PATH" -o /tmp/hermes-desktop-icon-validation.iconset >/dev/null
+    rm -rf /tmp/hermes-desktop-icon-validation.iconset
+}
+
+BUILD_SDK="$(pick_sdk)"
+BUILD_ENV=(
+    "CLANG_MODULE_CACHE_PATH=$SWIFTPM_HOME/module-cache"
+    "SDKROOT=$BUILD_SDK"
+)
+SWIFT_FLAGS=(
+    build
+    -c release
+    --disable-sandbox
+    --manifest-cache local
+    --cache-path "$SWIFTPM_HOME/cache"
+    --config-path "$SWIFTPM_HOME/configuration"
+    --security-path "$SWIFTPM_HOME/security"
+    --scratch-path "$SCRATCH_PATH"
+)
+
+echo "Building $APP_DISPLAY_NAME with SDK: $BUILD_SDK"
+env "${BUILD_ENV[@]}" swift "${SWIFT_FLAGS[@]}"
+
+BIN_DIR="$(env "${BUILD_ENV[@]}" swift "${SWIFT_FLAGS[@]}" --show-bin-path)"
+EXECUTABLE_PATH="$BIN_DIR/$APP_NAME"
+RESOURCE_BUNDLE_PATH="$BIN_DIR/SwiftTerm_SwiftTerm.bundle"
+
+if [[ ! -x "$EXECUTABLE_PATH" ]]; then
+    echo "error: expected executable not found at $EXECUTABLE_PATH" >&2
+    exit 1
+fi
+
+if [[ ! -d "$RESOURCE_BUNDLE_PATH" ]]; then
+    echo "error: expected SwiftTerm resource bundle not found at $RESOURCE_BUNDLE_PATH" >&2
+    exit 1
+fi
+
+generate_icon
+
+rm -rf "$BUNDLE_PATH"
+mkdir -p "$MACOS_PATH" "$RESOURCES_PATH"
+
+cp "$EXECUTABLE_PATH" "$MACOS_PATH/$APP_NAME"
+cp "$PLIST_PATH" "$CONTENTS_PATH/Info.plist"
+cp "$ICNS_PATH" "$RESOURCES_PATH/AppIcon.icns"
+cp -R "$RESOURCE_BUNDLE_PATH" "$BUNDLE_PATH/"
+
+echo
+echo "App bundle created:"
+echo "  $BUNDLE_PATH"
+echo "Unsigned bundle: macOS may require right-click > Open on first launch."

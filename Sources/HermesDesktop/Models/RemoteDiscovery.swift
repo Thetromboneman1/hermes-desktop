@@ -1,0 +1,57 @@
+import Foundation
+
+struct RemoteDiscovery: Codable {
+    let ok: Bool
+    let remoteHome: String
+    let hermesHome: String
+    let paths: RemoteHermesPaths
+    let exists: RemoteHermesPathExistence
+    let sessionStore: RemoteSessionStore?
+
+    enum CodingKeys: String, CodingKey {
+        case ok
+        case remoteHome = "remote_home"
+        case hermesHome = "hermes_home"
+        case paths
+        case exists
+        case sessionStore = "session_store"
+    }
+}
+
+struct RemoteHermesPaths: Codable {
+    let memory: String
+    let user: String
+    let sessionsDir: String
+
+    enum CodingKeys: String, CodingKey {
+        case memory
+        case user
+        case sessionsDir = "sessions_dir"
+    }
+}
+
+struct RemoteHermesPathExistence: Codable {
+    let memory: Bool
+    let user: Bool
+    let sessionsDir: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case memory
+        case user
+        case sessionsDir = "sessions_dir"
+    }
+}
+
+struct RemoteSessionStore: Codable {
+    let kind: String
+    let path: String
+    let sessionTable: String?
+    let messageTable: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case path
+        case sessionTable = "session_table"
+        case messageTable = "message_table"
+    }
+}
