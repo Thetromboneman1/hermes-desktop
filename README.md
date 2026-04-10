@@ -6,7 +6,7 @@ Hermes Desktop is for people who already use Hermes and want it to feel at home
 on a Mac.
 
 It brings the parts of the workflow that matter most into one native window:
-sessions, canonical files, and a real terminal.
+sessions, canonical files, usage, skills, and a real terminal.
 
 If you already live in Hermes, the app should feel immediately legible: your
 host, your files, your shell.
@@ -26,10 +26,26 @@ That is the point of the app. Hermes Desktop does not try to replace the real
 Hermes workflow. It makes that workflow feel faster, calmer, and more native on
 macOS without hiding how it actually works.
 
-![Hermes Desktop Sessions view](assets/readme-preview-sessions-blurred-safe.png)
+## Preview
 
-Preview of the Sessions view, showing recent Hermes conversations on the active
-host.
+<table>
+  <tr>
+    <td width="50%">
+      <img src="assets/readme-preview-usage-blurred.png" alt="Hermes Desktop Usage view" />
+    </td>
+    <td width="50%">
+      <img src="assets/readme-skills-preview_blurred.png" alt="Hermes Desktop Skills view" />
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="assets/readme-terminal-preview-blurred.png" alt="Hermes Desktop Terminal view" />
+    </td>
+  </tr>
+</table>
+
+Usage, Skills, and Terminal on a live Hermes host, kept privacy-safe for the
+public README.
 
 ## What You Get
 
@@ -39,6 +55,8 @@ host.
   - `~/.hermes/memories/USER.md`
   - `~/.hermes/memories/MEMORY.md`
   - `~/.hermes/SOUL.md`
+- aggregate usage totals from the canonical session store in `~/.hermes/state.db`
+- recursive skill browsing from `~/.hermes/skills/**/SKILL.md`
 - session browsing from the canonical remote store at `~/.hermes/state.db`
 - fallback to `~/.hermes/sessions/*.jsonl` only if the SQLite store is not
   available
@@ -173,6 +191,11 @@ If `Test` passes, `Use Host` should be on solid ground.
   Lets you edit `USER.md`, `MEMORY.md`, and `SOUL.md` on the host.
 - `Sessions`
   Reads the real remote session store from `~/.hermes/state.db`.
+- `Usage`
+  Shows aggregate input and output token totals from the same remote session
+  store.
+- `Skills`
+  Discovers and reads remote `SKILL.md` files under `~/.hermes/skills/`.
 - `Terminal`
   Opens the real SSH shell inside the app.
 
@@ -273,10 +296,11 @@ This is the direction from here:
 ### Recently Shipped
 
 - [x] richer workflows around the canonical Hermes files: `USER.md`, `MEMORY.md`, and `SOUL.md`
+- [x] a native usage dashboard for aggregate input and output tokens from the remote Hermes session store
+- [x] a recursive skills browser for discovering and inspecting remote `SKILL.md` files under `~/.hermes/skills/`
 
 ### Next
 
-- skill management views for tracking, inspecting, editing, and organizing agent skills from the app
 - multi-profile support, aligned with Hermes Agent profiles and the app-side connection flow needed to select and use them cleanly
 - UI skins and appearance options to personalize the terminal and the broader chat-like workspace
 - clearer documentation, setup guides, and troubleshooting for new users
