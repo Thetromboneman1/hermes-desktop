@@ -39,7 +39,7 @@ macOS without hiding how it actually works.
   </tr>
   <tr>
     <td colspan="2">
-      <img src="assets/readme-terminal-preview-blurred.png" alt="Hermes Desktop Terminal view" />
+      <img src="assets/readme-terminal-preview-blurred_blurred.png" alt="Hermes Desktop Terminal view" />
     </td>
   </tr>
 </table>
