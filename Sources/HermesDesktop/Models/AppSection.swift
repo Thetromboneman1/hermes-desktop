@@ -5,6 +5,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case overview
     case files
     case sessions
+    case cronjobs
     case usage
     case skills
     case terminal
@@ -21,6 +22,8 @@ enum AppSection: String, CaseIterable, Identifiable {
             "Files"
         case .sessions:
             "Sessions"
+        case .cronjobs:
+            "Cron Jobs"
         case .usage:
             "Usage"
         case .skills:
@@ -40,6 +43,8 @@ enum AppSection: String, CaseIterable, Identifiable {
             "doc.text"
         case .sessions:
             "clock.arrow.circlepath"
+        case .cronjobs:
+            "calendar.badge.clock"
         case .usage:
             "chart.bar.xaxis"
         case .skills:

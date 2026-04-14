@@ -22,6 +22,12 @@ struct SkillsView: View {
             .frame(minWidth: 300, idealWidth: 340, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 20)
             .padding(.vertical, 20)
+            .overlay(alignment: .topTrailing) {
+                if appState.isLoadingSkills && !appState.isRefreshingSkills && !appState.skills.isEmpty {
+                    HermesLoadingOverlay()
+                        .padding(18)
+                }
+            }
 
             SkillDetailView(
                 summary: selectedSkill,
@@ -113,16 +119,10 @@ struct SkillsView: View {
     }
 
     private var skillsSearchToolbar: some View {
-        HStack(spacing: 10) {
-            if appState.isLoadingSkills && !appState.isRefreshingSkills && !appState.skills.isEmpty {
-                HermesLoadingOverlay()
-            }
-
-            HermesExpandableSearchField(
-                text: $searchText,
-                prompt: "Search skills"
-            )
-        }
+        HermesExpandableSearchField(
+            text: $searchText,
+            prompt: "Search skills"
+        )
     }
 
     private var panelTitle: String {

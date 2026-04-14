@@ -70,7 +70,7 @@ struct RootView: View {
         if appState.activeConnection == nil {
             return [.connections]
         }
-        return [.connections, .overview, .files, .sessions, .usage, .skills, .terminal]
+        return [.connections, .overview, .sessions, .cronjobs, .files, .usage, .skills, .terminal]
     }
 
     private var sectionSelection: Binding<AppSection?> {
@@ -110,6 +110,8 @@ struct RootView: View {
             FilesView()
         case .sessions:
             SessionsView()
+        case .cronjobs:
+            CronJobsView()
         case .usage:
             UsageView()
         case .skills:

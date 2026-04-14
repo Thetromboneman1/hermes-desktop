@@ -33,6 +33,13 @@ final class AppState: ObservableObject {
     @Published var isLoadingSkills = false
     @Published var isRefreshingSkills = false
     @Published var isLoadingSkillDetail = false
+    @Published var cronJobs: [CronJob] = []
+    @Published var selectedCronJobID: String?
+    @Published var cronJobsError: String?
+    @Published var isLoadingCronJobs = false
+    @Published var isRefreshingCronJobs = false
+    @Published var isOperatingOnCronJob = false
+    @Published var operatingCronJobID: String?
     @Published var selectedTrackedFile: RemoteTrackedFile = .memory
     @Published var memoryDocument = FileEditorDocument(trackedFile: .memory)
     @Published var userDocument = FileEditorDocument(trackedFile: .user)
@@ -47,6 +54,7 @@ final class AppState: ObservableObject {
     let sessionBrowserService: SessionBrowserService
     let usageBrowserService: UsageBrowserService
     let skillBrowserService: SkillBrowserService
+    let cronBrowserService: CronBrowserService
     let terminalWorkspace: TerminalWorkspaceStore
 
     private let sessionPageSize = 50
@@ -66,6 +74,7 @@ final class AppState: ObservableObject {
         self.sessionBrowserService = SessionBrowserService(sshTransport: sshTransport)
         self.usageBrowserService = UsageBrowserService(sshTransport: sshTransport)
         self.skillBrowserService = SkillBrowserService(sshTransport: sshTransport)
+        self.cronBrowserService = CronBrowserService(sshTransport: sshTransport)
         self.terminalWorkspace = TerminalWorkspaceStore(sshTransport: sshTransport)
 
         connectionStore.objectWillChange
@@ -243,6 +252,13 @@ final class AppState: ObservableObject {
         isRefreshingSkills = true
         await loadSkills(reset: true)
         isRefreshingSkills = false
+    }
+
+    func refreshCronJobs() async {
+        guard !isLoadingCronJobs, !isRefreshingCronJobs else { return }
+        isRefreshingCronJobs = true
+        await loadCronJobs()
+        isRefreshingCronJobs = false
     }
 
     func loadTrackedFile(_ trackedFile: RemoteTrackedFile, forceReload: Bool = false) async {
@@ -497,6 +513,121 @@ final class AppState: ObservableObject {
         }
     }
 
+    func loadCronJobs() async {
+        guard let profile = activeConnection else { return }
+        if isLoadingCronJobs { return }
+
+        let previousSelectedCronJobID = selectedCronJobID
+        isLoadingCronJobs = true
+        cronJobsError = nil
+
+        do {
+            let jobs = try await cronBrowserService.listJobs(connection: profile)
+            cronJobs = jobs
+            isLoadingCronJobs = false
+
+            if let previousSelectedCronJobID,
+               jobs.contains(where: { $0.id == previousSelectedCronJobID }) {
+                selectedCronJobID = previousSelectedCronJobID
+            } else {
+                selectedCronJobID = jobs.first?.id
+            }
+        } catch {
+            isLoadingCronJobs = false
+            cronJobsError = error.localizedDescription
+            setStatusMessage("Unable to load cron jobs")
+        }
+    }
+
+    func pauseCronJob(_ job: CronJob) async {
+        guard let profile = activeConnection else { return }
+        guard !isOperatingOnCronJob else { return }
+
+        isOperatingOnCronJob = true
+        operatingCronJobID = job.id
+        cronJobsError = nil
+
+        do {
+            try await cronBrowserService.pauseJob(connection: profile, jobID: job.id)
+            await loadCronJobs()
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            setStatusMessage("\(job.resolvedName) paused")
+        } catch {
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            cronJobsError = error.localizedDescription
+            setStatusMessage("Unable to pause cron job")
+        }
+    }
+
+    func resumeCronJob(_ job: CronJob) async {
+        guard let profile = activeConnection else { return }
+        guard !isOperatingOnCronJob else { return }
+
+        isOperatingOnCronJob = true
+        operatingCronJobID = job.id
+        cronJobsError = nil
+
+        do {
+            try await cronBrowserService.resumeJob(connection: profile, jobID: job.id)
+            await loadCronJobs()
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            setStatusMessage("\(job.resolvedName) resumed")
+        } catch {
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            cronJobsError = error.localizedDescription
+            setStatusMessage("Unable to resume cron job")
+        }
+    }
+
+    func deleteCronJob(_ job: CronJob) async {
+        guard let profile = activeConnection else { return }
+        guard !isOperatingOnCronJob else { return }
+
+        isOperatingOnCronJob = true
+        operatingCronJobID = job.id
+        cronJobsError = nil
+
+        do {
+            try await cronBrowserService.removeJob(connection: profile, jobID: job.id)
+            await loadCronJobs()
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            setStatusMessage("\(job.resolvedName) removed")
+        } catch {
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            cronJobsError = error.localizedDescription
+            setStatusMessage("Unable to remove cron job")
+        }
+    }
+
+    func runCronJobNow(_ job: CronJob) async {
+        guard let profile = activeConnection else { return }
+        guard !isOperatingOnCronJob else { return }
+
+        isOperatingOnCronJob = true
+        operatingCronJobID = job.id
+        cronJobsError = nil
+        setStatusMessage("Triggering \(job.resolvedName)…")
+
+        do {
+            try await cronBrowserService.runJobNow(connection: profile, jobID: job.id)
+            await loadCronJobs()
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            setStatusMessage("Run requested for \(job.resolvedName)")
+        } catch {
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
+            cronJobsError = error.localizedDescription
+            setStatusMessage("Unable to run cron job")
+        }
+    }
+
     func deleteConnection(_ profile: ConnectionProfile) {
         connectionStore.delete(profile)
         if activeConnectionID == profile.id {
@@ -519,6 +650,8 @@ final class AppState: ObservableObject {
             Task { await ensureInitialFileLoads() }
         case .sessions:
             Task { await loadSessions(reset: true) }
+        case .cronjobs:
+            Task { await loadCronJobs() }
         case .usage:
             Task { await loadUsage(forceRefresh: true) }
         case .skills:
@@ -580,6 +713,13 @@ final class AppState: ObservableObject {
             isLoadingSkills = false
             isRefreshingSkills = false
             isLoadingSkillDetail = false
+            cronJobs = []
+            selectedCronJobID = nil
+            cronJobsError = nil
+            isLoadingCronJobs = false
+            isRefreshingCronJobs = false
+            isOperatingOnCronJob = false
+            operatingCronJobID = nil
             resetDocuments()
             return
         }
@@ -614,6 +754,13 @@ final class AppState: ObservableObject {
         isLoadingSkills = false
         isRefreshingSkills = false
         isLoadingSkillDetail = false
+        cronJobs = []
+        selectedCronJobID = nil
+        cronJobsError = nil
+        isLoadingCronJobs = false
+        isRefreshingCronJobs = false
+        isOperatingOnCronJob = false
+        operatingCronJobID = nil
         resetDocuments()
         terminalWorkspace.closeAllTabs()
     }

@@ -24,6 +24,12 @@ struct UsageView: View {
             .padding(.horizontal, 28)
             .padding(.vertical, 26)
             .frame(maxWidth: .infinity, alignment: .top)
+            .overlay(alignment: .topTrailing) {
+                if appState.isLoadingUsage && !appState.isRefreshingUsage && appState.usageSummary != nil {
+                    HermesLoadingOverlay()
+                        .padding(18)
+                }
+            }
         }
         .task(id: appState.activeConnectionID) {
             await appState.loadUsage()
@@ -65,12 +71,6 @@ struct UsageView: View {
                         )
                         .frame(maxWidth: .infinity, minHeight: 320)
                     }
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if appState.isLoadingUsage && !appState.isRefreshingUsage {
-                    HermesLoadingOverlay()
-                        .padding(18)
                 }
             }
         } else {
