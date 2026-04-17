@@ -214,19 +214,18 @@ private struct MessageCard: View {
     }
 
     private var displayRole: String {
-        let role = (message.role ?? "event").replacingOccurrences(of: "_", with: " ")
-        return role.capitalized
+        message.role.displayTitle
     }
 
     private var roleTint: Color {
-        switch (message.role ?? "").lowercased() {
-        case "assistant":
+        switch message.role {
+        case .assistant:
             return .blue
-        case "user":
+        case .user:
             return .green
-        case "system":
+        case .system:
             return .orange
-        default:
+        case .event, .custom:
             return .secondary
         }
     }

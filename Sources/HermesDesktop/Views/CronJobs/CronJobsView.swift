@@ -1096,17 +1096,14 @@ private struct CronStatusBadge: View {
     }
 
     private var tint: Color {
-        if job.isRunning {
+        switch job.state {
+        case .running:
             return .blue
-        }
-        if job.isPaused {
+        case .paused:
             return .orange
-        }
-
-        switch job.state.lowercased() {
-        case "failed", "error":
+        case .failed, .error:
             return .red
-        default:
+        case .scheduled, .other:
             return .green
         }
     }

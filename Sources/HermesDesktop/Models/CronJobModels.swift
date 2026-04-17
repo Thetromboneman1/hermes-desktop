@@ -5,7 +5,7 @@ struct CronJobListResponse: Codable {
     let jobs: [CronJob]
 }
 
-struct CronJob: Codable, Identifiable, Hashable {
+struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
     let id: String
     let name: String
     let prompt: String
@@ -17,7 +17,7 @@ struct CronJob: Codable, Identifiable, Hashable {
     let scheduleDisplay: String
     let recurrence: CronRecurrence?
     let enabled: Bool
-    let state: String
+    let state: CronJobState
     let createdAt: Date?
     let nextRunAt: Date?
     let lastRunAt: Date?
@@ -78,43 +78,19 @@ struct CronJob: Codable, Identifiable, Hashable {
     }
 
     var isPaused: Bool {
-        normalizedState == "paused"
+        state == .paused
     }
 
     var isRunning: Bool {
-        normalizedState == "running"
+        state == .running
     }
 
     var isActive: Bool {
-        isRunning || normalizedState == "scheduled"
+        state.isActive
     }
 
     var displayState: String {
-        switch normalizedState {
-        case "scheduled":
-            return "Active"
-        case "":
-            return enabled ? "Active" : "Paused"
-        default:
-            return normalizedState
-                .replacingOccurrences(of: "_", with: " ")
-                .capitalized
-        }
-    }
-
-    var displayModel: String? {
-        guard let model,
-              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-
-        if model.count <= 34 {
-            return model
-        }
-
-        let prefix = model.prefix(16)
-        let suffix = model.suffix(12)
-        return "\(prefix)…\(suffix)"
+        state.displayTitle(isEnabled: enabled)
     }
 
     func matchesSearch(_ query: String) -> Bool {
@@ -139,11 +115,6 @@ struct CronJob: Codable, Identifiable, Hashable {
                 .localizedStandardContains(normalizedQuery)
         }
     }
-
-    private var normalizedState: String {
-        state.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
     var rawScheduleText: String? {
         let expr = schedule?.expr?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !expr.isEmpty {
@@ -152,6 +123,85 @@ struct CronJob: Codable, Identifiable, Hashable {
 
         let display = scheduleDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
         return display.isEmpty ? nil : display
+    }
+}
+
+enum CronJobState: Codable, Hashable {
+    case scheduled
+    case paused
+    case running
+    case failed
+    case error
+    case other(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self = Self(decodedValue: try container.decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(encodedValue)
+    }
+
+    var isActive: Bool {
+        self == .scheduled || self == .running
+    }
+
+    func displayTitle(isEnabled: Bool) -> String {
+        switch self {
+        case .scheduled:
+            return "Active"
+        case .paused:
+            return "Paused"
+        case .running:
+            return "Running"
+        case .failed:
+            return "Failed"
+        case .error:
+            return "Error"
+        case .other(let value):
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return isEnabled ? "Active" : "Paused"
+            }
+            return trimmed.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private init(decodedValue: String) {
+        let normalized = decodedValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "scheduled":
+            self = .scheduled
+        case "paused":
+            self = .paused
+        case "running":
+            self = .running
+        case "failed":
+            self = .failed
+        case "error":
+            self = .error
+        default:
+            self = .other(decodedValue)
+        }
+    }
+
+    private var encodedValue: String {
+        switch self {
+        case .scheduled:
+            return "scheduled"
+        case .paused:
+            return "paused"
+        case .running:
+            return "running"
+        case .failed:
+            return "failed"
+        case .error:
+            return "error"
+        case .other(let value):
+            return value
+        }
     }
 }
 
@@ -489,32 +539,6 @@ struct CronScheduleDraft: Hashable {
         case .custom:
             let trimmed = customExpression.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
-        }
-    }
-
-    var scheduleKind: String? {
-        switch preset {
-        case .afterDelay:
-            return "delay"
-        case .atDateTime:
-            return "at"
-        case .everyInterval:
-            return "every"
-        case .hourly, .daily, .weekdays, .weekly, .monthly:
-            return "cron"
-        case .custom:
-            guard let expression else { return nil }
-            let parts = expression.split(whereSeparator: \.isWhitespace)
-            return parts.count == 5 ? "cron" : nil
-        }
-    }
-
-    var repeatTimes: Int? {
-        switch preset {
-        case .afterDelay, .atDateTime:
-            return 1
-        default:
-            return nil
         }
     }
 

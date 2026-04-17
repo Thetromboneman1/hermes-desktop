@@ -75,10 +75,6 @@ struct ConnectionProfile: Codable, Identifiable, Equatable, Hashable {
         return "~/.hermes"
     }
 
-    var remoteSessionsPath: String {
-        "\(remoteHermesHomePath)/sessions"
-    }
-
     var remoteSkillsPath: String {
         "\(remoteHermesHomePath)/skills"
     }

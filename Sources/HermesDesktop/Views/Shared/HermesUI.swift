@@ -208,55 +208,6 @@ struct HermesLabeledValue: View {
     }
 }
 
-struct HermesActionTile: View {
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    var tint: Color = .accentColor
-    var isProminent = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .foregroundStyle(isProminent ? tint : .primary)
-                    .frame(width: 28)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 12)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isProminent ? tint.opacity(0.12) : Color.secondary.opacity(0.08))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isProminent ? 0.10 : 0.06), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct HermesExpandableSearchField: View {
     @Binding var text: String
 

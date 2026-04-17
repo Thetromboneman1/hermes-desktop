@@ -9,6 +9,7 @@ struct SSHCommandResult {
 enum SSHTransportError: LocalizedError {
     case invalidConnection(String)
     case launchFailure(String)
+    case localFailure(String)
     case remoteFailure(String)
     case invalidResponse(String)
 
@@ -16,6 +17,7 @@ enum SSHTransportError: LocalizedError {
         switch self {
         case .invalidConnection(let message),
              .launchFailure(let message),
+             .localFailure(let message),
              .remoteFailure(let message),
              .invalidResponse(let message):
             message
@@ -225,7 +227,19 @@ final class SSHTransport: @unchecked Sendable {
                 if let standardInput,
                    let pipe = process.standardInput as? Pipe {
                     pipe.fileHandleForWriting.write(standardInput)
-                    try? pipe.fileHandleForWriting.close()
+                    do {
+                        try pipe.fileHandleForWriting.close()
+                    } catch {
+                        stdoutHandle.readabilityHandler = nil
+                        stderrHandle.readabilityHandler = nil
+
+                        guard state.claimResume() else { return }
+                        continuation.resume(
+                            throwing: SSHTransportError.localFailure(
+                                "Failed to finish sending input to ssh: \(error.localizedDescription)"
+                            )
+                        )
+                    }
                 }
             } catch {
                 stdoutHandle.readabilityHandler = nil
@@ -309,13 +323,22 @@ final class SSHTransport: @unchecked Sendable {
 
     private func structuredRemoteError(in output: String) -> String? {
         guard let data = output.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let error = object["error"] as? String,
-              !error.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              let payload = try? JSONDecoder().decode(RemoteErrorPayload.self, from: data),
+              let error = payload.trimmedError else {
             return nil
         }
 
         return error
+    }
+}
+
+private struct RemoteErrorPayload: Decodable {
+    let error: String?
+
+    var trimmedError: String? {
+        guard let error else { return nil }
+        let trimmed = error.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

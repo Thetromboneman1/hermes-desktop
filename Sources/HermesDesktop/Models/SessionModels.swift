@@ -12,12 +12,12 @@ struct SessionListPage: Codable {
     }
 }
 
-struct SessionSummary: Codable, Identifiable, Hashable {
+struct SessionSummary: Codable, Identifiable, Hashable, TitleIdentifiable, OptionalModelDisplayable {
     let id: String
     let title: String?
     let model: String?
-    let startedAt: JSONValue?
-    let lastActive: JSONValue?
+    let startedAt: SessionTimestamp?
+    let lastActive: SessionTimestamp?
     let messageCount: Int?
     let preview: String?
 
@@ -30,27 +30,6 @@ struct SessionSummary: Codable, Identifiable, Hashable {
         case messageCount = "message_count"
         case preview
     }
-
-    var resolvedTitle: String {
-        if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return title
-        }
-        return id
-    }
-
-    var displayModel: String? {
-        guard let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-
-        if model.count <= 34 {
-            return model
-        }
-
-        let prefix = model.prefix(16)
-        let suffix = model.suffix(12)
-        return "\(prefix)…\(suffix)"
-    }
 }
 
 struct SessionDetailResponse: Codable {
@@ -60,10 +39,27 @@ struct SessionDetailResponse: Codable {
 
 struct SessionMessage: Codable, Identifiable, Hashable {
     let id: String
-    let role: String?
+    let role: SessionMessageRole
     let content: String?
-    let timestamp: JSONValue?
+    let timestamp: SessionTimestamp?
     let metadata: [String: JSONValue]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case content
+        case timestamp
+        case metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        role = try container.decodeIfPresent(SessionMessageRole.self, forKey: .role) ?? .event
+        content = try container.decodeIfPresent(String.self, forKey: .content)
+        timestamp = try container.decodeIfPresent(SessionTimestamp.self, forKey: .timestamp)
+        metadata = try container.decodeIfPresent([String: JSONValue].self, forKey: .metadata)
+    }
 
     var displayMetadata: [String: JSONValue]? {
         guard let metadata else {
@@ -72,6 +68,117 @@ struct SessionMessage: Codable, Identifiable, Hashable {
 
         let filtered = metadata.compactMapValues { $0.removingNulls }
         return filtered.isEmpty ? nil : filtered
+    }
+}
+
+enum SessionTimestamp: Codable, Hashable {
+    case unixSeconds(Double)
+    case text(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if let value = try? container.decode(Int.self) {
+            self = .unixSeconds(Double(value))
+        } else if let value = try? container.decode(Double.self) {
+            self = .unixSeconds(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .text(value)
+        } else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported timestamp value"
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .unixSeconds(let value):
+            try container.encode(value)
+        case .text(let value):
+            try container.encode(value)
+        }
+    }
+
+    var dateValue: Date? {
+        switch self {
+        case .unixSeconds(let value):
+            return Date(timeIntervalSince1970: value)
+        case .text(let value):
+            if let double = Double(value) {
+                return Date(timeIntervalSince1970: double)
+            }
+            return ISO8601DateFormatter.fractionalSecondsFormatter().date(from: value) ??
+                ISO8601DateFormatter().date(from: value)
+        }
+    }
+}
+
+enum SessionMessageRole: Codable, Hashable {
+    case assistant
+    case user
+    case system
+    case event
+    case custom(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self = Self(decodedValue: try container.decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(encodedValue)
+    }
+
+    var displayTitle: String {
+        switch self {
+        case .assistant:
+            return "Assistant"
+        case .user:
+            return "User"
+        case .system:
+            return "System"
+        case .event:
+            return "Event"
+        case .custom(let value):
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "Event" }
+            return trimmed.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private init(decodedValue: String) {
+        let normalized = decodedValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "assistant":
+            self = .assistant
+        case "user":
+            self = .user
+        case "system":
+            self = .system
+        case "", "event":
+            self = .event
+        default:
+            self = .custom(decodedValue)
+        }
+    }
+
+    private var encodedValue: String {
+        switch self {
+        case .assistant:
+            return "assistant"
+        case .user:
+            return "user"
+        case .system:
+            return "system"
+        case .event:
+            return "event"
+        case .custom(let value):
+            return value
+        }
     }
 }
 

@@ -26,93 +26,8 @@ final class RemoteHermesService: @unchecked Sendable {
     private var discoveryScript: String {
         """
         import json
-        import os
         import pathlib
         import sqlite3
-        import sys
-
-        def tilde(path: pathlib.Path, home: pathlib.Path) -> str:
-            try:
-                relative = path.relative_to(home)
-                return "~/" + relative.as_posix() if relative.as_posix() != "." else "~"
-            except ValueError:
-                return path.as_posix()
-
-        def choose_table(tables, needle):
-            lowered = needle.lower()
-            for table in tables:
-                if table.lower() == lowered:
-                    return table
-            for table in tables:
-                if lowered in table.lower():
-                    return table
-            return None
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
-
-        def expand_remote_path(value, home):
-            if not value:
-                return home / ".hermes"
-            return pathlib.Path(os.path.expanduser(value))
-
-        def iter_session_store_candidates(hermes_home: pathlib.Path):
-            seen = set()
-
-            def emit(candidate: pathlib.Path):
-                resolved = str(candidate)
-                if resolved in seen or not candidate.is_file():
-                    return None
-                seen.add(resolved)
-                return candidate
-
-            preferred = [
-                hermes_home / "state.db",
-                hermes_home / "state.sqlite",
-                hermes_home / "state.sqlite3",
-                hermes_home / "store.db",
-                hermes_home / "store.sqlite",
-                hermes_home / "store.sqlite3",
-            ]
-
-            for candidate in preferred:
-                candidate = emit(candidate)
-                if candidate is not None:
-                    yield candidate
-
-            for candidate in sorted(
-                [
-                    item
-                    for pattern in ("*.db", "*.sqlite", "*.sqlite3")
-                    for item in hermes_home.glob(pattern)
-                    if item.is_file()
-                ],
-                key=lambda item: item.stat().st_mtime,
-                reverse=True,
-            ):
-                candidate = emit(candidate)
-                if candidate is not None:
-                    yield candidate
-
-            sessions_dir = hermes_home / "sessions"
-            if sessions_dir.exists():
-                for candidate in sorted(
-                    [
-                        item
-                        for pattern in ("*.db", "*.sqlite", "*.sqlite3")
-                        for item in sessions_dir.rglob(pattern)
-                        if item.is_file()
-                    ],
-                    key=lambda item: item.stat().st_mtime,
-                    reverse=True,
-                ):
-                    candidate = emit(candidate)
-                    if candidate is not None:
-                        yield candidate
 
         def discover_session_store(hermes_home: pathlib.Path):
             if not hermes_home.exists():
@@ -144,7 +59,7 @@ final class RemoteHermesService: @unchecked Sendable {
         try:
             home = pathlib.Path.home()
             default_hermes_home = home / ".hermes"
-            hermes_home = expand_remote_path(payload.get("hermes_home"), home)
+            hermes_home = expand_remote_path(payload.get("hermes_home"), home) or default_hermes_home
             user_path = hermes_home / "memories" / "USER.md"
             memory_path = hermes_home / "memories" / "MEMORY.md"
             soul_path = hermes_home / "SOUL.md"

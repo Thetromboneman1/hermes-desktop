@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class ConnectionStore: ObservableObject {
     @Published private(set) var connections: [ConnectionProfile] = []
+    @Published private(set) var persistenceError: String?
     @Published var lastConnectionID: UUID? {
         didSet {
             savePreferences()
@@ -45,21 +46,18 @@ final class ConnectionStore: ObservableObject {
     }
 
     private func load() {
-        if let data = try? Data(contentsOf: paths.connectionsURL),
-           let decoded = try? decoder.decode([ConnectionProfile].self, from: data) {
-            connections = decoded
-        }
-
-        if let data = try? Data(contentsOf: paths.preferencesURL),
-           let decoded = try? decoder.decode(AppPreferences.self, from: data) {
-            lastConnectionID = decoded.lastConnectionID
-            terminalTheme = decoded.terminalTheme ?? .defaultValue
-        }
+        loadConnections()
+        loadPreferences()
     }
 
     private func saveConnections() {
-        if let data = try? encoder.encode(connections) {
-            try? data.write(to: paths.connectionsURL, options: [.atomic])
+        do {
+            let data = try encoder.encode(connections)
+            try data.write(to: paths.connectionsURL, options: [.atomic])
+        } catch {
+            reportPersistenceError(
+                "Unable to save saved hosts to \(paths.connectionsURL.lastPathComponent): \(error.localizedDescription)"
+            )
         }
         savePreferences()
     }
@@ -69,9 +67,51 @@ final class ConnectionStore: ObservableObject {
             lastConnectionID: lastConnectionID,
             terminalTheme: terminalTheme
         )
-        if let data = try? encoder.encode(preferences) {
-            try? data.write(to: paths.preferencesURL, options: [.atomic])
+
+        do {
+            let data = try encoder.encode(preferences)
+            try data.write(to: paths.preferencesURL, options: [.atomic])
+        } catch {
+            reportPersistenceError(
+                "Unable to save app preferences to \(paths.preferencesURL.lastPathComponent): \(error.localizedDescription)"
+            )
         }
+    }
+
+    private func loadConnections() {
+        do {
+            let data = try Data(contentsOf: paths.connectionsURL)
+            connections = try decoder.decode([ConnectionProfile].self, from: data)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            connections = []
+        } catch {
+            connections = []
+            reportPersistenceError(
+                "Unable to load saved hosts from \(paths.connectionsURL.lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func loadPreferences() {
+        do {
+            let data = try Data(contentsOf: paths.preferencesURL)
+            let decoded = try decoder.decode(AppPreferences.self, from: data)
+            lastConnectionID = decoded.lastConnectionID
+            terminalTheme = decoded.terminalTheme ?? .defaultValue
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            lastConnectionID = nil
+            terminalTheme = .defaultValue
+        } catch {
+            lastConnectionID = nil
+            terminalTheme = .defaultValue
+            reportPersistenceError(
+                "Unable to load app preferences from \(paths.preferencesURL.lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func reportPersistenceError(_ message: String) {
+        persistenceError = message
     }
 }
 

@@ -36,7 +36,7 @@ struct UsageSummary: Codable {
     }
 }
 
-struct UsageRecentSession: Codable, Identifiable, Hashable {
+struct UsageSessionMetric: Codable, Identifiable, Hashable, TitleIdentifiable {
     let id: String
     let title: String?
     let inputTokens: Int64
@@ -52,28 +52,8 @@ struct UsageRecentSession: Codable, Identifiable, Hashable {
     }
 }
 
-struct UsageTopSession: Codable, Identifiable, Hashable {
-    let id: String
-    let title: String?
-    let inputTokens: Int64
-    let outputTokens: Int64
-    let totalTokens: Int64
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case title
-        case inputTokens = "input_tokens"
-        case outputTokens = "output_tokens"
-        case totalTokens = "total_tokens"
-    }
-
-    var resolvedTitle: String {
-        if let title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return title
-        }
-        return id
-    }
-}
+typealias UsageRecentSession = UsageSessionMetric
+typealias UsageTopSession = UsageSessionMetric
 
 struct UsageTopModel: Codable, Identifiable, Hashable {
     let model: String
@@ -115,22 +95,6 @@ struct UsageProfileBreakdown: Hashable {
         readableProfiles.reduce(into: 0) { partialResult, profile in
             partialResult += profile.allTokenCategoriesTotal
         }
-    }
-
-    var hostWideInputTokens: Int64 {
-        readableProfiles.reduce(into: 0) { $0 += $1.inputTokens }
-    }
-
-    var hostWideOutputTokens: Int64 {
-        readableProfiles.reduce(into: 0) { $0 += $1.outputTokens }
-    }
-
-    var hostWideCacheTokens: Int64 {
-        readableProfiles.reduce(into: 0) { $0 += $1.cacheTokensTotal }
-    }
-
-    var hostWideReasoningTokens: Int64 {
-        readableProfiles.reduce(into: 0) { $0 += $1.reasoningTokens }
     }
 
     var unavailableProfiles: [UsageProfileSlice] {
@@ -179,15 +143,5 @@ extension UsageSummary {
     var averageTokensPerSession: Int64 {
         guard sessionCount > 0 else { return 0 }
         return Int64((Double(totalTokens) / Double(sessionCount)).rounded())
-    }
-
-    var averageInputTokensPerSession: Int64 {
-        guard sessionCount > 0 else { return 0 }
-        return Int64((Double(inputTokens) / Double(sessionCount)).rounded())
-    }
-
-    var averageOutputTokensPerSession: Int64 {
-        guard sessionCount > 0 else { return 0 }
-        return Int64((Double(outputTokens) / Double(sessionCount)).rounded())
     }
 }

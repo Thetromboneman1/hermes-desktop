@@ -10,12 +10,9 @@ struct SkillDetailResponse: Codable {
     let item: SkillDetail
 }
 
-struct SkillWriteResponse: Codable {
-    let ok: Bool
-    let item: SkillDetail
-}
+typealias SkillWriteResponse = SkillDetailResponse
 
-struct SkillSummary: Codable, Identifiable, Hashable {
+struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
     let id: String
     let slug: String
     let category: String?
@@ -44,41 +41,6 @@ struct SkillSummary: Codable, Identifiable, Hashable {
         case hasTemplates = "has_templates"
     }
 
-    var resolvedName: String {
-        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return name
-        }
-        return slug
-    }
-
-    var trimmedDescription: String? {
-        guard let description else { return nil }
-        let value = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
-    var featureBadges: [SkillFeatureBadge] {
-        var badges: [SkillFeatureBadge] = []
-        if hasReferences {
-            badges.append(.references)
-        }
-        if hasScripts {
-            badges.append(.scripts)
-        }
-        if hasTemplates {
-            badges.append(.templates)
-        }
-        return badges
-    }
-
-    var resolvedCategory: String {
-        guard let category,
-              !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return "Root"
-        }
-        return category
-    }
-
     func matchesSearch(_ query: String) -> Bool {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return true }
@@ -96,7 +58,7 @@ struct SkillSummary: Codable, Identifiable, Hashable {
     }
 }
 
-struct SkillDetail: Codable, Identifiable, Hashable {
+struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
     let id: String
     let slug: String
     let category: String?
@@ -129,32 +91,6 @@ struct SkillDetail: Codable, Identifiable, Hashable {
         case contentHash = "content_hash"
     }
 
-    var resolvedName: String {
-        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return name
-        }
-        return slug
-    }
-
-    var trimmedDescription: String? {
-        guard let description else { return nil }
-        let value = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
-    }
-
-    var featureBadges: [SkillFeatureBadge] {
-        var badges: [SkillFeatureBadge] = []
-        if hasReferences {
-            badges.append(.references)
-        }
-        if hasScripts {
-            badges.append(.scripts)
-        }
-        if hasTemplates {
-            badges.append(.templates)
-        }
-        return badges
-    }
 }
 
 enum SkillEditorMode: Identifiable, Equatable {

@@ -299,7 +299,7 @@ struct OverviewView: View {
 
                         Spacer(minLength: 12)
 
-                        OverviewBadge(text: displaySessionStoreKind(sessionStore.kind), tint: .accentColor)
+                        OverviewBadge(text: sessionStore.kind.displayName, tint: .accentColor)
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -376,15 +376,6 @@ struct OverviewView: View {
                 isReady: overview.sessionStore != nil || overview.exists.sessionsDir
             )
         ]
-    }
-
-    private func displaySessionStoreKind(_ rawValue: String) -> String {
-        switch rawValue.lowercased() {
-        case "sqlite":
-            "SQLite"
-        default:
-            rawValue.capitalized
-        }
     }
 }
 

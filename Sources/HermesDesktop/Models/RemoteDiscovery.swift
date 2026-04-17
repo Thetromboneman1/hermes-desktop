@@ -71,7 +71,7 @@ struct RemoteHermesPathExistence: Codable {
 }
 
 struct RemoteSessionStore: Codable {
-    let kind: String
+    let kind: RemoteSessionStoreKind
     let path: String
     let sessionTable: String?
     let messageTable: String?
@@ -81,5 +81,50 @@ struct RemoteSessionStore: Codable {
         case path
         case sessionTable = "session_table"
         case messageTable = "message_table"
+    }
+}
+
+enum RemoteSessionStoreKind: Codable, Hashable {
+    case sqlite
+    case other(String)
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self = Self(decodedValue: try container.decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(encodedValue)
+    }
+
+    var displayName: String {
+        switch self {
+        case .sqlite:
+            return "SQLite"
+        case .other(let value):
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "Unknown" }
+            return trimmed.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    private init(decodedValue: String) {
+        let normalized = decodedValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "sqlite":
+            self = .sqlite
+        default:
+            self = .other(decodedValue)
+        }
+    }
+
+    private var encodedValue: String {
+        switch self {
+        case .sqlite:
+            return "sqlite"
+        case .other(let value):
+            return value
+        }
     }
 }

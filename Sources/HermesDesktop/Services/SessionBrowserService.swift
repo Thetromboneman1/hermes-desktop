@@ -339,60 +339,10 @@ final class SessionBrowserService: @unchecked Sendable {
     private var sharedSessionHelpers: String {
         """
         import json
-        import os
         import pathlib
         import sqlite3
-        import sys
         import datetime
         import re
-
-        def choose_table(tables, needle):
-            lowered = needle.lower()
-            for name in tables:
-                if name.lower() == lowered:
-                    return name
-            for name in tables:
-                if lowered in name.lower():
-                    return name
-            return None
-
-        def choose_column(columns, choices):
-            lowered = {column.lower(): column for column in columns}
-            for choice in choices:
-                if choice.lower() in lowered:
-                    return lowered[choice.lower()]
-            for choice in choices:
-                for column in columns:
-                    if choice.lower() in column.lower():
-                        return column
-            return None
-
-        def quote_ident(value):
-            return '"' + value.replace('"', '""') + '"'
-
-        def expand_remote_path(value, home):
-            if not value:
-                return None
-            if value == "~":
-                return home
-            if value.startswith("~/"):
-                return home / value[2:]
-            return pathlib.Path(value)
-
-        def stringify(value):
-            if value is None:
-                return None
-            if isinstance(value, bytes):
-                return value.decode("utf-8", errors="replace")
-            return str(value)
-
-        def resolved_hermes_home():
-            home = pathlib.Path.home()
-            requested = payload.get("hermes_home")
-            expanded = expand_remote_path(requested, home)
-            if expanded is not None:
-                return expanded
-            return home / ".hermes"
 
         def display_hermes_home():
             requested = stringify(payload.get("hermes_home"))
@@ -458,13 +408,6 @@ final class SessionBrowserService: @unchecked Sendable {
                 return float(value)
             except Exception:
                 return str(value)
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
 
         def sanitize_preview(text):
             if text is None:
@@ -546,66 +489,6 @@ final class SessionBrowserService: @unchecked Sendable {
                 return json.dumps(content, ensure_ascii=False)
 
             return stringify(content)
-
-        def iter_session_store_candidates(hermes_home, home, hinted_path=None):
-            seen = set()
-
-            def emit(candidate):
-                if candidate is None:
-                    return None
-                resolved = str(candidate)
-                if resolved in seen or not candidate.is_file():
-                    return None
-                seen.add(resolved)
-                return candidate
-
-            hinted_candidate = emit(expand_remote_path(hinted_path, home))
-            if hinted_candidate is not None:
-                yield hinted_candidate
-
-            preferred = [
-                hermes_home / "state.db",
-                hermes_home / "state.sqlite",
-                hermes_home / "state.sqlite3",
-                hermes_home / "store.db",
-                hermes_home / "store.sqlite",
-                hermes_home / "store.sqlite3",
-            ]
-
-            for candidate in preferred:
-                candidate = emit(candidate)
-                if candidate is not None:
-                    yield candidate
-
-            for candidate in sorted(
-                [
-                    item
-                    for pattern in ("*.db", "*.sqlite", "*.sqlite3")
-                    for item in hermes_home.glob(pattern)
-                    if item.is_file()
-                ],
-                key=lambda item: item.stat().st_mtime,
-                reverse=True,
-            ):
-                candidate = emit(candidate)
-                if candidate is not None:
-                    yield candidate
-
-            sessions_dir = hermes_home / "sessions"
-            if sessions_dir.exists():
-                for candidate in sorted(
-                    [
-                        item
-                        for pattern in ("*.db", "*.sqlite", "*.sqlite3")
-                        for item in sessions_dir.rglob(pattern)
-                        if item.is_file()
-                    ],
-                    key=lambda item: item.stat().st_mtime,
-                    reverse=True,
-                ):
-                    candidate = emit(candidate)
-                    if candidate is not None:
-                        yield candidate
 
         def discover_jsonl_artifacts():
             sessions_dir = resolved_hermes_home() / "sessions"

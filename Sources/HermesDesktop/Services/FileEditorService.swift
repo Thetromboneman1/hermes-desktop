@@ -17,19 +17,10 @@ final class FileEditorService: @unchecked Sendable {
             body: """
             import hashlib
             import json
-            import os
             import pathlib
-            import sys
-
-            def fail(message):
-                print(json.dumps({
-                    "ok": False,
-                    "error": message,
-                }, ensure_ascii=False))
-                sys.exit(1)
 
             try:
-                target = pathlib.Path(os.path.expanduser(payload["path"]))
+                target = expand_remote_path(payload["path"]) or pathlib.Path(payload["path"])
                 if not target.exists():
                     fail(f"{payload['path']} does not exist on the active host.")
                 if not target.is_file():
@@ -83,15 +74,7 @@ final class FileEditorService: @unchecked Sendable {
             import json
             import os
             import pathlib
-            import sys
             import tempfile
-
-            def fail(message):
-                print(json.dumps({
-                    "ok": False,
-                    "error": message,
-                }, ensure_ascii=False))
-                sys.exit(1)
 
             temp_name = None
             directory_fd = None
@@ -99,7 +82,7 @@ final class FileEditorService: @unchecked Sendable {
             expected_hash = payload.get("expected_content_hash")
 
             try:
-                target = pathlib.Path(os.path.expanduser(payload["path"]))
+                target = expand_remote_path(payload["path"]) or pathlib.Path(payload["path"])
                 target.parent.mkdir(parents=True, exist_ok=True)
 
                 if expected_hash is not None:

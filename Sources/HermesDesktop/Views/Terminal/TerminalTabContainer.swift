@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct TerminalTabContainer: View {
-    @EnvironmentObject private var appState: AppState
     @ObservedObject var session: TerminalSession
     let appearance: TerminalThemeAppearance
     let isActive: Bool
+    let activeWorkspaceScopeFingerprint: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,7 +57,7 @@ struct TerminalTabContainer: View {
     }
 
     private var isDifferentFromActiveWorkspace: Bool {
-        guard let activeConnection = appState.activeConnection else { return false }
-        return activeConnection.workspaceScopeFingerprint != session.connection.workspaceScopeFingerprint
+        guard let activeWorkspaceScopeFingerprint else { return false }
+        return activeWorkspaceScopeFingerprint != session.connection.workspaceScopeFingerprint
     }
 }

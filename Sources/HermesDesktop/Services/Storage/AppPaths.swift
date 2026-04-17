@@ -42,9 +42,7 @@ struct AppPaths {
     }
 
     private func controlSocketIdentifier(for connection: ConnectionProfile) -> String {
-        // Service-style SSH requests should stay scoped to the Hermes workspace.
-        // Different profiles map to different HERMES_HOME roots on the same host,
-        // so sharing a control socket across profiles can couple unrelated state.
+        // Scope SSH control sockets to the workspace so profiles on the same host stay isolated.
         let digest = SHA256.hash(data: Data(connection.workspaceScopeFingerprint.utf8))
         let hexDigest = digest.map { String(format: "%02x", $0) }.joined()
         return String(hexDigest.prefix(24))

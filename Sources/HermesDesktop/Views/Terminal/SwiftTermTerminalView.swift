@@ -5,23 +5,17 @@ struct SwiftTermTerminalView: NSViewRepresentable {
     let appearance: TerminalThemeAppearance
     let isActive: Bool
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> TerminalMountContainerView {
+    func makeNSView(context _: Context) -> TerminalMountContainerView {
         let container = TerminalMountContainerView()
         session.mount(in: container, appearance: appearance, isActive: isActive)
         return container
     }
 
-    func updateNSView(_ nsView: TerminalMountContainerView, context: Context) {
+    func updateNSView(_ nsView: TerminalMountContainerView, context _: Context) {
         session.mount(in: nsView, appearance: appearance, isActive: isActive)
     }
 
-    static func dismantleNSView(_ nsView: TerminalMountContainerView, coordinator: Coordinator) {
+    static func dismantleNSView(_ nsView: TerminalMountContainerView, coordinator _: Void) {
         nsView.unmountHostedView()
     }
-
-    final class Coordinator {}
 }

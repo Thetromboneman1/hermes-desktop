@@ -4,32 +4,42 @@ import Foundation
 
 @MainActor
 final class TerminalViewHost: NSObject, LocalProcessTerminalViewDelegate {
-    private weak var session: TerminalSession?
     private let hostView = TerminalHostView()
     private var startedLaunchToken: UUID?
     private var scheduledLaunchToken: UUID?
     private var appliedAppearance: TerminalThemeAppearance?
+    private var onProcessStart: (() -> Void)?
+    private var onTitleChange: ((String) -> Void)?
+    private var onDirectoryChange: ((String?) -> Void)?
+    private var onProcessExit: ((Int32?) -> Void)?
 
     override init() {
         super.init()
         hostView.terminalView.processDelegate = self
     }
 
-    func bind(session: TerminalSession) {
-        self.session = session
+    func setEventHandlers(
+        onProcessStart: @escaping () -> Void,
+        onTitleChange: @escaping (String) -> Void,
+        onDirectoryChange: @escaping (String?) -> Void,
+        onProcessExit: @escaping (Int32?) -> Void
+    ) {
+        self.onProcessStart = onProcessStart
+        self.onTitleChange = onTitleChange
+        self.onDirectoryChange = onDirectoryChange
+        self.onProcessExit = onProcessExit
     }
 
     func mount(
         in container: TerminalMountContainerView,
-        session: TerminalSession,
+        request: TerminalLaunchRequest,
         appearance: TerminalThemeAppearance,
         isActive: Bool
     ) {
-        self.session = session
         container.mount(hostView)
         applyAppearance(appearance)
         setActive(isActive)
-        scheduleStartIfNeeded(for: session)
+        scheduleStartIfNeeded(for: request)
     }
 
     func unmount(from container: TerminalMountContainerView) {
@@ -44,39 +54,37 @@ final class TerminalViewHost: NSObject, LocalProcessTerminalViewDelegate {
 
     nonisolated func setTerminalTitle(source: LocalProcessTerminalView, title: String) {
         Task { @MainActor [weak self] in
-            self?.session?.updateTitle(title)
+            self?.onTitleChange?(title)
         }
     }
 
     nonisolated func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {
         Task { @MainActor [weak self] in
-            self?.session?.currentDirectory = directory
+            self?.onDirectoryChange?(directory)
         }
     }
 
     nonisolated func processTerminated(source: TerminalView, exitCode: Int32?) {
         Task { @MainActor [weak self] in
-            self?.session?.markExited(exitCode)
+            self?.onProcessExit?(exitCode)
         }
     }
 
-    private func scheduleStartIfNeeded(for session: TerminalSession) {
-        let launchToken = session.launchToken
+    private func scheduleStartIfNeeded(for request: TerminalLaunchRequest) {
+        let launchToken = request.launchToken
         guard startedLaunchToken != launchToken else { return }
         guard scheduledLaunchToken != launchToken else { return }
         scheduledLaunchToken = launchToken
 
-        Task { @MainActor [weak self, weak session] in
-            guard let self, let session else { return }
-            self.startIfNeeded(for: session, launchToken: launchToken)
+        Task { @MainActor [weak self] in
+            self?.startIfNeeded(for: request)
         }
     }
 
-    private func startIfNeeded(for session: TerminalSession, launchToken: UUID) {
+    private func startIfNeeded(for request: TerminalLaunchRequest) {
         scheduledLaunchToken = nil
-        guard self.session === session else { return }
-        guard startedLaunchToken != launchToken else { return }
-        startedLaunchToken = launchToken
+        guard startedLaunchToken != request.launchToken else { return }
+        startedLaunchToken = request.launchToken
 
         let environment = [
             "TERM=xterm-256color",
@@ -85,11 +93,11 @@ final class TerminalViewHost: NSObject, LocalProcessTerminalViewDelegate {
 
         hostView.terminalView.startProcess(
             executable: "/usr/bin/ssh",
-            args: session.sshArguments,
+            args: request.sshArguments,
             environment: environment,
             execName: "ssh"
         )
-        session.markStarted()
+        onProcessStart?()
     }
 
     private func applyAppearance(_ appearance: TerminalThemeAppearance) {
@@ -109,8 +117,14 @@ final class TerminalViewHost: NSObject, LocalProcessTerminalViewDelegate {
     @objc
     private func terminateOnMainThread() {
         scheduledLaunchToken = nil
+        startedLaunchToken = nil
         hostView.terminalView.terminate()
     }
+}
+
+struct TerminalLaunchRequest {
+    let sshArguments: [String]
+    let launchToken: UUID
 }
 
 final class TerminalMountContainerView: NSView {

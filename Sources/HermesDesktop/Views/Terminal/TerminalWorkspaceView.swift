@@ -1,9 +1,10 @@
-import AppKit
 import SwiftUI
 
 struct TerminalWorkspaceView: View {
     @ObservedObject var workspace: TerminalWorkspaceStore
-    @EnvironmentObject private var appState: AppState
+    let context: TerminalWorkspaceContext
+    let ensureTerminalSession: () -> Void
+    let updateTerminalTheme: (TerminalThemePreference) -> Void
     @State private var isShowingAppearanceEditor = false
 
     var body: some View {
@@ -20,7 +21,7 @@ struct TerminalWorkspaceView: View {
                     )
                 }
 
-                if let activeConnection = appState.activeConnection {
+                if let activeConnection = context.activeConnection {
                     Button {
                         requestNewTab(for: activeConnection)
                     } label: {
@@ -34,7 +35,7 @@ struct TerminalWorkspaceView: View {
                 TerminalAppearanceToolbarButton(
                     appearance: terminalAppearance,
                     isPresented: $isShowingAppearanceEditor,
-                    themeBinding: terminalThemeBinding
+                    themePreference: terminalThemeBinding
                 )
             }
             .padding(.horizontal, 16)
@@ -45,7 +46,8 @@ struct TerminalWorkspaceView: View {
                 TerminalTabContainer(
                     session: selectedTab.session,
                     appearance: terminalAppearance,
-                    isActive: appState.selectedSection == .terminal
+                    isActive: context.isTerminalSectionActive,
+                    activeWorkspaceScopeFingerprint: context.activeWorkspaceScopeFingerprint
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
@@ -56,32 +58,32 @@ struct TerminalWorkspaceView: View {
                 )
             }
         }
-        .task(id: appState.activeConnectionID) {
-            if appState.selectedSection == .terminal {
-                appState.ensureTerminalSession()
+        .task(id: context.activeConnection?.id) {
+            if context.isTerminalSectionActive {
+                ensureTerminalSession()
             }
         }
-        .onChange(of: appState.selectedSection) { _, newValue in
-            if newValue == .terminal {
-                appState.ensureTerminalSession()
+        .onChange(of: context.isTerminalSectionActive) { _, isActive in
+            if isActive {
+                ensureTerminalSession()
             }
         }
     }
 
     private var terminalAppearance: TerminalThemeAppearance {
-        appState.connectionStore.terminalTheme.resolvedAppearance
+        context.terminalTheme.resolvedAppearance
     }
 
     private var terminalThemeBinding: Binding<TerminalThemePreference> {
         Binding {
-            appState.connectionStore.terminalTheme
+            context.terminalTheme
         } set: { newValue in
-            appState.connectionStore.terminalTheme = newValue
+            updateTerminalTheme(newValue)
         }
     }
 
     private func isTabForActiveWorkspace(_ tab: TerminalTabModel) -> Bool {
-        guard let activeConnection = appState.activeConnection else { return true }
+        guard let activeConnection = context.activeConnection else { return true }
         return tab.workspaceScopeFingerprint == activeConnection.workspaceScopeFingerprint
     }
 
@@ -198,7 +200,7 @@ private struct TerminalTabChip: View {
 private struct TerminalAppearanceToolbarButton: View {
     let appearance: TerminalThemeAppearance
     @Binding var isPresented: Bool
-    @Binding var themeBinding: TerminalThemePreference
+    @Binding var themePreference: TerminalThemePreference
 
     var body: some View {
         Button {
@@ -225,7 +227,7 @@ private struct TerminalAppearanceToolbarButton: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $isPresented, arrowEdge: .top) {
-            TerminalAppearanceEditor(themePreference: $themeBinding)
+            TerminalAppearanceEditor(themePreference: $themePreference)
         }
         .help("Customize terminal colors")
     }

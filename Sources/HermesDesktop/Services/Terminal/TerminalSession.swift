@@ -17,7 +17,20 @@ final class TerminalSession: ObservableObject, @unchecked Sendable {
         self.connection = connection
         self.sshArguments = sshTransport.shellArguments(for: connection)
         self.terminalTitle = "\(connection.label) · \(connection.resolvedHermesProfileName)"
-        viewHost.bind(session: self)
+        viewHost.setEventHandlers(
+            onProcessStart: { [weak self] in
+                self?.markStarted()
+            },
+            onTitleChange: { [weak self] title in
+                self?.updateTitle(title)
+            },
+            onDirectoryChange: { [weak self] directory in
+                self?.currentDirectory = directory
+            },
+            onProcessExit: { [weak self] exitCode in
+                self?.markExited(exitCode)
+            }
+        )
     }
 
     deinit {
@@ -47,7 +60,15 @@ final class TerminalSession: ObservableObject, @unchecked Sendable {
     }
 
     func mount(in container: TerminalMountContainerView, appearance: TerminalThemeAppearance, isActive: Bool) {
-        viewHost.mount(in: container, session: self, appearance: appearance, isActive: isActive)
+        viewHost.mount(
+            in: container,
+            request: TerminalLaunchRequest(
+                sshArguments: sshArguments,
+                launchToken: launchToken
+            ),
+            appearance: appearance,
+            isActive: isActive
+        )
     }
 
     func unmount(from container: TerminalMountContainerView) {

@@ -143,35 +143,7 @@ final class CronBrowserService: @unchecked Sendable {
         """
         import json
         import pathlib
-        import sys
         from datetime import datetime, timezone
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
-
-        def resolved_hermes_home():
-            requested = payload.get("hermes_home")
-            home = pathlib.Path.home()
-
-            if requested == "~":
-                return home
-            if isinstance(requested, str) and requested.startswith("~/"):
-                return home / requested[2:]
-            if requested:
-                return pathlib.Path(requested)
-            return home / ".hermes"
-
-        def normalize_text(value):
-            if value is None:
-                return None
-            if isinstance(value, bytes):
-                value = value.decode("utf-8", errors="replace")
-            value = str(value).strip()
-            return value or None
 
         def normalize_bool(value):
             if isinstance(value, bool):
@@ -428,14 +400,6 @@ final class CronBrowserService: @unchecked Sendable {
         import pathlib
         import shutil
         import subprocess
-        import sys
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
 
         def find_hermes_binary():
             candidate = shutil.which("hermes")
@@ -492,35 +456,7 @@ final class CronBrowserService: @unchecked Sendable {
         import pathlib
         import re
         import secrets
-        import sys
         from datetime import datetime, timezone
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
-
-        def resolved_hermes_home():
-            requested = payload.get("hermes_home")
-            home = pathlib.Path.home()
-
-            if requested == "~":
-                return home
-            if isinstance(requested, str) and requested.startswith("~/"):
-                return home / requested[2:]
-            if requested:
-                return pathlib.Path(requested)
-            return home / ".hermes"
-
-        def normalize_text(value):
-            if value is None:
-                return None
-            if isinstance(value, bytes):
-                value = value.decode("utf-8", errors="replace")
-            value = str(value).strip()
-            return value or None
 
         def normalize_list(value):
             if value is None:
@@ -566,6 +502,23 @@ final class CronBrowserService: @unchecked Sendable {
 
         def iso_now():
             return datetime.now(timezone.utc).isoformat()
+
+        def normalize_origin_payload(value):
+            if not isinstance(value, dict):
+                return None
+
+            normalized = {
+                "kind": normalize_text(value.get("kind")) or normalize_text(value.get("type")) or normalize_text(value.get("platform")),
+                "source": normalize_text(value.get("source")) or normalize_text(value.get("path")),
+                "label": normalize_text(value.get("label")) or normalize_text(value.get("name")) or normalize_text(value.get("chat_name")),
+            }
+
+            normalized = {
+                key: item
+                for key, item in normalized.items()
+                if item is not None
+            }
+            return normalized or None
 
         def detect_schedule(value):
             if value is None:
@@ -637,7 +590,6 @@ final class CronBrowserService: @unchecked Sendable {
                 "name": name,
                 "prompt": prompt_text,
                 "skills": skills,
-                "skill": skills[0] if len(skills) == 1 else None,
                 "model": model,
                 "provider": provider,
                 "base_url": base_url,
@@ -663,8 +615,8 @@ final class CronBrowserService: @unchecked Sendable {
                 "last_error": None,
                 "deliver": delivery,
                 "origin": {
-                    "platform": "desktop",
-                    "chat_name": "Hermes Desktop",
+                    "kind": "desktop",
+                    "label": "Hermes Desktop",
                 },
             }
             jobs.append(job)
@@ -698,11 +650,17 @@ final class CronBrowserService: @unchecked Sendable {
         target["name"] = name
         target["prompt"] = prompt_text
         target["skills"] = skills
-        target["skill"] = skills[0] if len(skills) == 1 else None
+        target.pop("skill", None)
         target["model"] = model
         target["provider"] = provider
         target["base_url"] = base_url
         target["deliver"] = delivery
+
+        normalized_origin = normalize_origin_payload(target.get("origin"))
+        if normalized_origin is not None:
+            target["origin"] = normalized_origin
+        else:
+            target.pop("origin", None)
 
         schedule_data = target.get("schedule")
         if not isinstance(schedule_data, dict):

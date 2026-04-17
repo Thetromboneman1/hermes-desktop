@@ -86,6 +86,17 @@ final class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
+        connectionStore.$persistenceError
+            .compactMap { $0 }
+            .sink { [weak self] message in
+                self?.activeAlert = AppAlert(
+                    title: "Local storage error",
+                    message: message
+                )
+                self?.setStatusMessage("Local storage error")
+            }
+            .store(in: &cancellables)
+
         self.activeConnectionID = connectionStore.lastConnectionID
 
         if activeConnectionID != nil {
@@ -206,14 +217,6 @@ final class AppState: ObservableObject {
             section: selectedSection,
             statusMessage: "Switching to \(profileName)…"
         )
-    }
-
-    func reconnectActiveConnection() {
-        Task {
-            guard activeConnection != nil else { return }
-            setStatusMessage("Reconnecting…")
-            await prepareWorkspaceForActiveConnection()
-        }
     }
 
     func testConnection(_ profile: ConnectionProfile) {

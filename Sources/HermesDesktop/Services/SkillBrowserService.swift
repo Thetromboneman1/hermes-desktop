@@ -222,39 +222,10 @@ final class SkillBrowserService: @unchecked Sendable {
         import hashlib
         import json
         import os
-        import pathlib
         import re
-        import sys
-
-        def fail(message):
-            print(json.dumps({
-                "ok": False,
-                "error": message,
-            }, ensure_ascii=False))
-            sys.exit(1)
 
         def skills_root():
-            requested = payload.get("hermes_home")
-            home = pathlib.Path.home()
-
-            if requested == "~":
-                hermes_home = home
-            elif isinstance(requested, str) and requested.startswith("~/"):
-                hermes_home = home / requested[2:]
-            elif requested:
-                hermes_home = pathlib.Path(requested)
-            else:
-                hermes_home = home / ".hermes"
-
-            return hermes_home / "skills"
-
-        def normalize_text(value):
-            if value is None:
-                return None
-            if isinstance(value, bytes):
-                value = value.decode("utf-8", errors="replace")
-            value = str(value).strip()
-            return value or None
+            return resolved_hermes_home() / "skills"
 
         def normalize_text_list(value):
             if value is None:
