@@ -35,23 +35,23 @@ where the canonical state lives, and which path the app is actually using.
 <table>
   <tr>
     <td width="50%">
-      <img src="assets/READ-ME-SESSIONS-BLURRED.png" alt="Hermes Desktop Sessions view" />
+      <img src="assets/CRON-JOBS.png" alt="Hermes Desktop Cron Jobs view" />
     </td>
     <td width="50%">
-      <img src="assets/READ-ME-USAGE.png" alt="Hermes Desktop Usage view" />
+      <img src="assets/USAGE.png" alt="Hermes Desktop Usage view" />
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="assets/README-SKILL-BLURRED.png" alt="Hermes Desktop Skills view" />
+      <img src="assets/SKILLS.png" alt="Hermes Desktop Skills view" />
     </td>
     <td width="50%">
-      <img src="assets/README-TERMINAL-BLURRED.png" alt="Hermes Desktop Terminal view" />
+      <img src="assets/TERMINALE.png" alt="Hermes Desktop Terminal view" />
     </td>
   </tr>
 </table>
 
-Sessions, Usage, Skills, and Terminal on a live Hermes host, kept privacy-safe
+Cron Jobs, Usage, Skills, and Terminal on a live Hermes host, kept privacy-safe
 for the public README.
 
 ## What You Get
@@ -471,6 +471,12 @@ bundle directly:
 ```
 
 Then open `dist/HermesDesktop.app`.
+
+To run the release-support test suite:
+
+```bash
+./scripts/run-tests.sh
+```
 
 To create the GitHub Releases archive:
 

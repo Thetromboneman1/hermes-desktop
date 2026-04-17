@@ -726,6 +726,11 @@ enum CronScheduleFormatter {
         let month = parts[3]
         let dayOfWeek = parts[4]
 
+        if hour == "*", month == "*", dayOfMonth == "*", dayOfWeek == "*",
+           let minuteValue = Int(minute) {
+            return String(format: "Every hour at :%02d", minuteValue)
+        }
+
         guard let time = formattedTime(hour: hour, minute: minute) else {
             return nil
         }
@@ -741,11 +746,6 @@ enum CronScheduleFormatter {
         if dayOfMonth == "*", month == "*",
            let days = formattedWeekdays(dayOfWeek) {
             return "Every \(days) at \(time)"
-        }
-
-        if hour == "*", month == "*", dayOfMonth == "*", dayOfWeek == "*",
-           let minuteValue = Int(minute) {
-            return String(format: "Every hour at :%02d", minuteValue)
         }
 
         if month == "*", dayOfWeek == "*",

@@ -24,6 +24,11 @@ let package = Package(
                 .product(name: "SwiftTerm", package: "SwiftTerm")
             ],
             path: "Sources/HermesDesktop"
+        ),
+        .testTarget(
+            name: "HermesDesktopTests",
+            dependencies: ["HermesDesktop"],
+            path: "Tests/HermesDesktopTests"
         )
     ]
 )
