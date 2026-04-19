@@ -78,7 +78,7 @@ for the public README.
   not available
 - aggregate usage totals, recent trends, model breakdowns, and host-wide
   cross-profile totals when more than one Hermes profile is readable
-- recursive skill browsing from `~/.hermes/skills/**/SKILL.md`
+- recursive skill browsing from the local Hermes skills store plus configured `skills.external_dirs`, with local precedence
 - direct skill editing and creation from Hermes Desktop, with atomic saves and
   conflict checks against the live remote `SKILL.md`
 - cron job browsing, creation, editing, pause, resume, run-now, and deletion
@@ -271,9 +271,11 @@ If `Test` passes, `Use Host` should be on solid ground.
   Shows aggregate input and output token totals, top sessions, top models,
   recent session trends, and when available, a host-wide profile breakdown.
 - `Skills`
-  Discovers, reads, creates, and edits remote `SKILL.md` files under
-  `~/.hermes/skills/`, with quick filtering, companion folder awareness,
-  optional folder scaffolding, and remote conflict checks before save.
+  Discovers and reads remote `SKILL.md` files from the local Hermes skills
+  store plus configured `skills.external_dirs`, while keeping skill creation
+  and editing anchored to `~/.hermes/skills/`, with quick filtering,
+  companion folder awareness, optional folder scaffolding, and remote
+  conflict checks before save.
 - `Terminal`
   Opens the real SSH shell inside the app, with multiple tabs, quick theme
   presets, live color tuning, and room for a genuinely multi-profile,
@@ -443,7 +445,8 @@ source of truth.
 - [x] a usage dashboard with aggregate token totals, top sessions, top models,
   trends, and host-wide multi-profile totals when available
 - [x] native skill workflows for discovering, inspecting, creating, and editing
-  remote `SKILL.md` files under `~/.hermes/skills/`
+  remote `SKILL.md` files from the Hermes skills store, with support for
+  configured external discovery directories and local write precedence
 - [x] profile-aware host workflows aligned with Hermes Agent profiles on the
   same SSH target
 - [x] native cron job workflows for the canonical remote scheduler state

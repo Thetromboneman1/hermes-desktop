@@ -47,9 +47,15 @@ struct SkillDetailView: View {
                 } else if let summary, isLoading {
                     HermesSurfacePanel {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text(summary.resolvedName)
-                                .font(.title2)
-                                .fontWeight(.semibold)
+                            HStack(spacing: 8) {
+                                Text(summary.resolvedName)
+                                    .font(.title2)
+                                    .fontWeight(.semibold)
+
+                                if !summary.source.isLocal {
+                                    HermesBadge(text: summary.sourceLabel, tint: .secondary)
+                                }
+                            }
 
                             Text(summary.relativePath)
                                 .font(.system(.caption, design: .monospaced))
@@ -101,9 +107,16 @@ struct SkillDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(detail.resolvedName)
-                            .font(.title2)
-                            .fontWeight(.semibold)
+                        HStack(spacing: 8) {
+                            Text(detail.resolvedName)
+                                .font(.title2)
+                                .fontWeight(.semibold)
+
+                            HermesBadge(
+                                text: detail.sourceLabel,
+                                tint: detail.source.isLocal ? .accentColor : .secondary
+                            )
+                        }
 
                         Text(detail.relativePath)
                             .font(.system(.caption, design: .monospaced))
@@ -122,6 +135,7 @@ struct SkillDetailView: View {
                             onEdit()
                         }
                         .buttonStyle(.bordered)
+                        .disabled(detail.isReadOnly)
                     }
                 }
 
@@ -145,6 +159,11 @@ struct SkillDetailView: View {
                         emphasizeValue: true
                     )
 
+                    HermesLabeledValue(
+                        label: "Source",
+                        value: detail.sourceLabel
+                    )
+
                     if let version = detail.version {
                         HermesLabeledValue(
                             label: "Version",
@@ -152,6 +171,24 @@ struct SkillDetailView: View {
                             isMonospaced: true
                         )
                     }
+                }
+
+                HermesInsetSurface {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Remote path")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(detail.skillFilePath)
+                            .font(.system(.subheadline, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if detail.isReadOnly {
+                    Text("External skill directories are discovery-only in Hermes. This skill is available to inspect here, but edits still belong in the local Hermes skills store.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -456,9 +493,7 @@ struct SkillEditorView: View {
     }
 
     private var existingRemoteSkillPath: String {
-        let root = appState.activeConnection?.remoteSkillsPath ?? "~/.hermes/skills"
-        let relativePath = detail?.id ?? "<selected-skill>"
-        return "\(root)/\(relativePath)/SKILL.md"
+        detail?.skillFilePath ?? "<selected-skill>"
     }
 
     private var saveDisabled: Bool {

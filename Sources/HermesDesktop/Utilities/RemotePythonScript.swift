@@ -21,6 +21,8 @@ enum RemotePythonScript {
     }
 
     private static let sharedHelpers = """
+    import os
+
     def fail(message):
         print(json.dumps({
             "ok": False,
@@ -69,18 +71,27 @@ enum RemotePythonScript {
     def quote_text(value):
         return "'" + str(value).replace("'", "''") + "'"
 
-    def expand_remote_path(value, home=None):
+    def expand_remote_path(value, home=None, base_dir=None):
         if home is None:
             home = pathlib.Path.home()
 
         normalized = normalize_text(value)
         if normalized is None:
             return None
-        if normalized == "~":
-            return home
-        if normalized.startswith("~/"):
-            return home / normalized[2:]
-        return pathlib.Path(normalized)
+        expanded = os.path.expandvars(normalized)
+        try:
+            path = pathlib.Path(expanded).expanduser()
+        except Exception:
+            path = pathlib.Path(expanded)
+
+        if not path.is_absolute():
+            if expanded == "~":
+                return home
+            if expanded.startswith("~/"):
+                return home / expanded[2:]
+            if base_dir is not None:
+                return base_dir / path
+        return path
 
     def resolved_hermes_home(request=None):
         request_data = payload if request is None else request
@@ -88,6 +99,9 @@ enum RemotePythonScript {
         expanded = expand_remote_path(request_data.get("hermes_home"), home)
         if expanded is not None:
             return expanded
+        env_home = expand_remote_path(os.environ.get("HERMES_HOME"), home)
+        if env_home is not None:
+            return env_home
         return home / ".hermes"
 
     def tilde(path, home=None):

@@ -83,7 +83,7 @@ struct SkillsView: View {
                 ContentUnavailableView(
                     "No skills found",
                     systemImage: "book.closed",
-                    description: Text("No readable SKILL.md files were discovered under \(skillsRootPath) on this SSH target.")
+                    description: Text("No readable SKILL.md files were discovered in the Hermes skill roots for this SSH target.")
                 )
                 .frame(maxWidth: .infinity, minHeight: 300)
             }
@@ -108,7 +108,7 @@ struct SkillsView: View {
                                     isSelected: skill.id == appState.selectedSkillID
                                 ) {
                                     Task {
-                                        await appState.loadSkillDetail(relativePath: skill.id)
+                                        await appState.loadSkillDetail(summary: skill)
                                     }
                                 }
                             }
@@ -185,15 +185,6 @@ struct SkillsView: View {
             )
         }
     }
-
-    private var skillsRootPath: String {
-        if let activeConnection = appState.activeConnection {
-            return activeConnection.remoteSkillsPath
-        }
-
-        return "~/.hermes/skills"
-    }
-
     private func startCreating() {
         var draft = SkillDraft()
         draft.refreshSuggestedSlug()
@@ -203,7 +194,7 @@ struct SkillsView: View {
     }
 
     private func startEditing() {
-        guard let detail = appState.selectedSkillDetail else { return }
+        guard let detail = appState.selectedSkillDetail, !detail.isReadOnly else { return }
         editorDraft = SkillDraft.from(detail: detail)
         rawMarkdownContent = detail.markdownContent
         editorMode = .edit
@@ -248,10 +239,16 @@ private struct SkillCardRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(skill.resolvedName)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.leading)
+                        HStack(spacing: 8) {
+                            Text(skill.resolvedName)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
+
+                            if !skill.source.isLocal {
+                                HermesBadge(text: skill.sourceLabel, tint: .secondary)
+                            }
+                        }
 
                         Text(skill.relativePath)
                             .font(.caption)

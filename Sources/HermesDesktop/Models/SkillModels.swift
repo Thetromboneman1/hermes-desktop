@@ -12,8 +12,39 @@ struct SkillDetailResponse: Codable {
 
 typealias SkillWriteResponse = SkillDetailResponse
 
+struct SkillLocator: Codable, Hashable {
+    let sourceID: String
+    let relativePath: String
+
+    enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
+        case relativePath = "relative_path"
+    }
+}
+
+enum SkillSourceKind: String, Codable, Hashable {
+    case local
+    case external
+}
+
+struct SkillSource: Codable, Hashable {
+    let id: String
+    let kind: SkillSourceKind
+    let rootPath: String
+    let isReadOnly: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case rootPath = "root_path"
+        case isReadOnly = "is_read_only"
+    }
+}
+
 struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
     let id: String
+    let locator: SkillLocator
+    let source: SkillSource
     let slug: String
     let category: String?
     let relativePath: String
@@ -28,6 +59,8 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case locator
+        case source
         case slug
         case category
         case relativePath = "relative_path"
@@ -48,7 +81,8 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
         let normalizedQuery = trimmedQuery.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
         let haystacks = [
             resolvedName,
-            resolvedCategory
+            resolvedCategory,
+            sourceLabel
         ]
 
         return haystacks.contains { value in
@@ -60,6 +94,8 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
 
 struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
     let id: String
+    let locator: SkillLocator
+    let source: SkillSource
     let slug: String
     let category: String?
     let relativePath: String
@@ -76,6 +112,8 @@ struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case locator
+        case source
         case slug
         case category
         case relativePath = "relative_path"
@@ -91,6 +129,31 @@ struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
         case contentHash = "content_hash"
     }
 
+}
+
+extension SkillSource {
+    var isLocal: Bool {
+        kind == .local
+    }
+
+    var badgeTitle: String {
+        switch kind {
+        case .local:
+            return "Local"
+        case .external:
+            return "External"
+        }
+    }
+}
+
+extension SkillSummary {
+    var sourceLabel: String {
+        source.badgeTitle
+    }
+
+    var skillFilePath: String {
+        "\(source.rootPath)/\(relativePath)/SKILL.md"
+    }
 }
 
 enum SkillEditorMode: Identifiable, Equatable {
@@ -319,6 +382,18 @@ Add any guardrails, references, or implementation details that matter.
 }
 
 extension SkillDetail {
+    var isReadOnly: Bool {
+        source.isReadOnly
+    }
+
+    var sourceLabel: String {
+        source.badgeTitle
+    }
+
+    var skillFilePath: String {
+        "\(source.rootPath)/\(relativePath)/SKILL.md"
+    }
+
     var markdownBodyContent: String {
         let content = markdownContent
         guard content.hasPrefix("---") else {

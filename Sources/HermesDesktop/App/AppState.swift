@@ -549,8 +549,10 @@ final class AppState: ObservableObject {
                     preferredSkillID = items.first?.id
                 }
 
-                if let preferredSkillID {
-                    await loadSkillDetail(relativePath: preferredSkillID)
+                if let preferredSkill = items.first(where: { $0.id == preferredSkillID }) {
+                    await loadSkillDetail(summary: preferredSkill)
+                } else if let firstSkill = items.first {
+                    await loadSkillDetail(summary: firstSkill)
                 } else {
                     selectedSkillID = nil
                     selectedSkillDetail = nil
@@ -564,9 +566,10 @@ final class AppState: ObservableObject {
         }
     }
 
-    func loadSkillDetail(relativePath: String) async {
+    func loadSkillDetail(summary: SkillSummary) async {
         guard let profile = activeConnection else { return }
-        selectedSkillID = relativePath
+        let skillID = summary.id
+        selectedSkillID = skillID
         selectedSkillDetail = nil
         skillsError = nil
         isLoadingSkillDetail = true
@@ -574,14 +577,14 @@ final class AppState: ObservableObject {
         do {
             let detail = try await skillBrowserService.loadSkillDetail(
                 connection: profile,
-                relativePath: relativePath
+                locator: summary.locator
             )
 
-            guard selectedSkillID == relativePath else { return }
+            guard selectedSkillID == skillID else { return }
             selectedSkillDetail = detail
             isLoadingSkillDetail = false
         } catch {
-            guard selectedSkillID == relativePath else { return }
+            guard selectedSkillID == skillID else { return }
             selectedSkillDetail = nil
             isLoadingSkillDetail = false
             skillsError = error.localizedDescription
@@ -647,7 +650,7 @@ final class AppState: ObservableObject {
         do {
             let updatedDetail = try await skillBrowserService.updateSkill(
                 connection: profile,
-                relativePath: detail.id,
+                locator: detail.locator,
                 markdownContent: normalizedContent + "\n",
                 expectedContentHash: detail.contentHash,
                 ensureReferencesFolder: ensureReferencesFolder,

@@ -24,11 +24,12 @@ final class SkillBrowserService: @unchecked Sendable {
 
     func loadSkillDetail(
         connection: ConnectionProfile,
-        relativePath: String
+        locator: SkillLocator
     ) async throws -> SkillDetail {
         let script = try RemotePythonScript.wrap(
             SkillDetailRequest(
-                relativePath: relativePath,
+                sourceID: locator.sourceID,
+                relativePath: locator.relativePath,
                 hermesHome: connection.remoteHermesHomePath
             ),
             body: skillDetailBody
@@ -49,6 +50,7 @@ final class SkillBrowserService: @unchecked Sendable {
     ) async throws -> SkillDetail {
         let script = try RemotePythonScript.wrap(
             SkillWriteRequest(
+                sourceID: nil,
                 relativePath: draft.relativePath,
                 markdownContent: draft.generatedMarkdown,
                 expectedContentHash: nil,
@@ -71,7 +73,7 @@ final class SkillBrowserService: @unchecked Sendable {
 
     func updateSkill(
         connection: ConnectionProfile,
-        relativePath: String,
+        locator: SkillLocator,
         markdownContent: String,
         expectedContentHash: String,
         ensureReferencesFolder: Bool,
@@ -80,7 +82,8 @@ final class SkillBrowserService: @unchecked Sendable {
     ) async throws -> SkillDetail {
         let script = try RemotePythonScript.wrap(
             SkillWriteRequest(
-                relativePath: relativePath,
+                sourceID: locator.sourceID,
+                relativePath: locator.relativePath,
                 markdownContent: markdownContent,
                 expectedContentHash: expectedContentHash,
                 createReferencesFolder: ensureReferencesFolder,
@@ -118,7 +121,7 @@ final class SkillBrowserService: @unchecked Sendable {
         sharedSkillHelpers + """
 
         try:
-            item = build_skill_detail(payload["relative_path"])
+            item = build_skill_detail(payload.get("source_id"), payload["relative_path"])
             print(json.dumps({
                 "ok": True,
                 "item": item,
@@ -177,10 +180,16 @@ final class SkillBrowserService: @unchecked Sendable {
             if not isinstance(markdown_content, str) or not markdown_content.strip():
                 fail("SKILL.md content is required.")
 
-            root = skills_root()
+            root = local_skills_root()
             root.mkdir(parents=True, exist_ok=True)
 
-            skill_file, _ = resolve_skill_file(relative_path)
+            requested_source_id = normalize_text(payload.get("source_id"))
+            if requested_source_id is not None:
+                source = resolve_skill_source(requested_source_id)
+                if source["is_read_only"]:
+                    fail("External skill directories are read-only in Hermes. Create a local skill with the same path to override it.")
+
+            skill_file, _ = resolve_skill_file("local", relative_path)
             skill_dir = skill_file.parent
             expected_hash = normalize_text(payload.get("expected_content_hash"))
 
@@ -205,7 +214,7 @@ final class SkillBrowserService: @unchecked Sendable {
                 (skill_dir / "templates").mkdir(parents=True, exist_ok=True)
 
             write_atomic_utf8(skill_file, markdown_content)
-            item = build_skill_detail(relative_path)
+            item = build_skill_detail("local", relative_path)
 
             print(json.dumps({
                 "ok": True,
@@ -224,8 +233,11 @@ final class SkillBrowserService: @unchecked Sendable {
         import os
         import re
 
-        def skills_root():
+        def local_skills_root():
             return resolved_hermes_home() / "skills"
+
+        def hermes_config_path():
+            return resolved_hermes_home() / "config.yaml"
 
         def normalize_text_list(value):
             if value is None:
@@ -387,6 +399,60 @@ final class SkillBrowserService: @unchecked Sendable {
 
             return None
 
+        def fallback_hermes_config_dict(config_text):
+            lines = config_text.splitlines()
+            external_dirs = []
+            index = 0
+
+            while index < len(lines):
+                raw_line = lines[index]
+                stripped = raw_line.strip()
+
+                if not stripped or stripped.startswith("#") or indentation(raw_line) != 0:
+                    index += 1
+                    continue
+
+                if not stripped.startswith("skills:"):
+                    index += 1
+                    continue
+
+                skills_lines, _ = collect_child_block(lines, index + 1, 0)
+                parsed_external_dirs = parse_key_value(skills_lines, "external_dirs")
+                if isinstance(parsed_external_dirs, list):
+                    external_dirs = normalize_text_list(parsed_external_dirs)
+                elif isinstance(parsed_external_dirs, str):
+                    external_dirs = normalize_text_list([parsed_external_dirs])
+                break
+
+            if not external_dirs:
+                return {}
+
+            return {
+                "skills": {
+                    "external_dirs": external_dirs,
+                }
+            }
+
+        def load_hermes_config():
+            config_path = hermes_config_path()
+            if not config_path.is_file():
+                return {}
+
+            try:
+                config_text = config_path.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                return {}
+
+            try:
+                import yaml
+                loaded = yaml.safe_load(config_text)
+                if isinstance(loaded, dict):
+                    return loaded
+            except Exception:
+                pass
+
+            return fallback_hermes_config_dict(config_text)
+
         def fallback_frontmatter_dict(frontmatter_text):
             lines = frontmatter_text.splitlines()
             metadata = {}
@@ -499,9 +565,69 @@ final class SkillBrowserService: @unchecked Sendable {
                 "has_templates": (skill_dir / "templates").is_dir(),
             }
 
-        def build_skill_summary(skill_file, root):
+        def resolve_skill_sources():
+            home = pathlib.Path.home()
+            config = load_hermes_config()
+            config_dir = hermes_config_path().parent
+            local_root = local_skills_root()
+            configured_external_dirs = []
+
+            skills_config = config.get("skills")
+            if isinstance(skills_config, dict):
+                configured_external_dirs = normalize_text_list(skills_config.get("external_dirs"))
+
+            raw_sources = [("local", local_root)]
+            for directory in configured_external_dirs:
+                candidate = expand_remote_path(directory, home=home, base_dir=config_dir)
+                if candidate is not None:
+                    raw_sources.append(("external", candidate))
+
+            sources = []
+            seen_roots = set()
+            external_index = 0
+
+            for kind, candidate in raw_sources:
+                try:
+                    resolved_root = candidate.resolve()
+                except Exception:
+                    continue
+
+                if str(resolved_root) in seen_roots:
+                    continue
+                seen_roots.add(str(resolved_root))
+
+                if kind == "local":
+                    source_id = "local"
+                    is_read_only = False
+                else:
+                    external_index += 1
+                    source_id = f"external:{external_index}"
+                    is_read_only = True
+
+                sources.append({
+                    "id": source_id,
+                    "kind": kind,
+                    "root": resolved_root,
+                    "root_path": tilde(resolved_root, home),
+                    "is_read_only": is_read_only,
+                })
+
+            return sources
+
+        def resolve_skill_source(source_id):
+            normalized = normalize_text(source_id)
+            if normalized is None:
+                normalized = "local"
+
+            for source in resolve_skill_sources():
+                if source["id"] == normalized:
+                    return source
+
+            fail("The requested skill source is no longer available. Reload the skill list and try again.")
+
+        def build_skill_summary(skill_file, source):
             content = skill_file.read_text(encoding="utf-8", errors="replace")
-            relative_path = skill_relative_path(skill_file, root)
+            relative_path = skill_relative_path(skill_file, source["root"])
             category = skill_category(relative_path)
             parsed = parse_frontmatter(content)
             slug = skill_file.parent.name
@@ -509,6 +635,16 @@ final class SkillBrowserService: @unchecked Sendable {
 
             return {
                 "id": relative_path,
+                "locator": {
+                    "source_id": source["id"],
+                    "relative_path": relative_path,
+                },
+                "source": {
+                    "id": source["id"],
+                    "kind": source["kind"],
+                    "root_path": source["root_path"],
+                    "is_read_only": source["is_read_only"],
+                },
                 "slug": slug,
                 "category": category,
                 "relative_path": relative_path,
@@ -530,46 +666,57 @@ final class SkillBrowserService: @unchecked Sendable {
             )
 
         def discover_skill_items():
-            root = skills_root()
-            if not root.exists():
-                return []
-
             items = []
-            for skill_file in sorted(root.rglob("SKILL.md")):
-                if not skill_file.is_file():
+            seen_relative_paths = set()
+
+            for source in resolve_skill_sources():
+                root = source["root"]
+                if not root.exists() or not root.is_dir():
                     continue
-                try:
-                    items.append(build_skill_summary(skill_file, root))
-                except Exception:
-                    continue
+
+                for skill_file in sorted(root.rglob("SKILL.md")):
+                    if not skill_file.is_file():
+                        continue
+                    try:
+                        item = build_skill_summary(skill_file, source)
+                    except Exception:
+                        continue
+
+                    relative_path = item["relative_path"]
+                    if relative_path in seen_relative_paths:
+                        continue
+
+                    seen_relative_paths.add(relative_path)
+                    items.append(item)
 
             items.sort(key=skill_sort_key)
             return items
 
-        def resolve_skill_file(relative_path):
+        def resolve_skill_file(source_id, relative_path):
             normalized = pathlib.PurePosixPath(relative_path)
             if normalized.is_absolute() or ".." in normalized.parts or not normalized.parts:
                 fail("The requested skill path is invalid.")
 
-            root = skills_root().resolve()
+            source = resolve_skill_source(source_id)
+            root = source["root"]
             target = (root / pathlib.Path(*normalized.parts) / "SKILL.md").resolve()
 
             try:
                 target.relative_to(root)
             except ValueError:
-                fail("The requested skill path escapes the Hermes skills directory.")
+                fail("The requested skill path escapes the configured Hermes skill source.")
 
-            return target, root
+            return target, source
 
-        def build_skill_detail(relative_path):
-            skill_file, root = resolve_skill_file(relative_path)
+        def build_skill_detail(source_id, relative_path):
+            skill_file, source = resolve_skill_file(source_id, relative_path)
             if not skill_file.exists():
                 fail(f"No skill exists at {relative_path}.")
             if not skill_file.is_file():
                 fail(f"{relative_path} does not resolve to a readable SKILL.md file.")
 
             content = skill_file.read_text(encoding="utf-8", errors="replace")
-            summary = build_skill_summary(skill_file, root)
+            summary = build_skill_summary(skill_file, source)
             summary["markdown_content"] = content
             summary["content_hash"] = hashlib.sha256(skill_file.read_bytes()).hexdigest()
             return summary
@@ -586,16 +733,19 @@ private struct EmptySkillRequest: Encodable {
 }
 
 private struct SkillDetailRequest: Encodable {
+    let sourceID: String
     let relativePath: String
     let hermesHome: String
 
     enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
         case relativePath = "relative_path"
         case hermesHome = "hermes_home"
     }
 }
 
 private struct SkillWriteRequest: Encodable {
+    let sourceID: String?
     let relativePath: String
     let markdownContent: String
     let expectedContentHash: String?
@@ -605,6 +755,7 @@ private struct SkillWriteRequest: Encodable {
     let hermesHome: String
 
     enum CodingKeys: String, CodingKey {
+        case sourceID = "source_id"
         case relativePath = "relative_path"
         case markdownContent = "markdown_content"
         case expectedContentHash = "expected_content_hash"

@@ -59,7 +59,7 @@ final class RemoteHermesService: @unchecked Sendable {
         try:
             home = pathlib.Path.home()
             default_hermes_home = home / ".hermes"
-            hermes_home = expand_remote_path(payload.get("hermes_home"), home) or default_hermes_home
+            hermes_home = resolved_hermes_home()
             user_path = hermes_home / "memories" / "USER.md"
             memory_path = hermes_home / "memories" / "MEMORY.md"
             soul_path = hermes_home / "SOUL.md"
