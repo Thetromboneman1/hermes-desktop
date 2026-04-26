@@ -18,6 +18,7 @@ PLIST_PATH="$ROOT_DIR/packaging/Info.plist"
 SHADER_SOURCE_PATH="$ROOT_DIR/Vendor/SwiftTerm/Sources/SwiftTerm/Apple/Metal/Shaders.metal"
 LOCALIZATION_SOURCE_PATH="$ROOT_DIR/Sources/HermesDesktop/Resources"
 UNIVERSAL_EXECUTABLE_PATH="$SCRATCH_PATH/${APP_NAME}-universal"
+APP_RESOURCE_BUNDLE_NAME="${APP_NAME}_${APP_NAME}.bundle"
 
 if [[ -n "${HERMES_MAC_ARCHS:-}" ]]; then
     read -r -a BUILD_ARCHES <<<"$HERMES_MAC_ARCHS"
@@ -156,6 +157,42 @@ bin_dir_for_arch() {
     env "${BUILD_ENV[@]}" swift "${SWIFT_FLAGS[@]}" --arch "$arch" --show-bin-path
 }
 
+resource_bundle_for_arch() {
+    local arch="$1"
+    local bin_dir
+
+    bin_dir="$(bin_dir_for_arch "$arch")"
+    printf '%s\n' "$bin_dir/$APP_RESOURCE_BUNDLE_NAME"
+}
+
+verify_localization_resources() {
+    local missing=0
+    local bundle_path="$RESOURCES_PATH/$APP_RESOURCE_BUNDLE_NAME"
+
+    if [[ ! -d "$bundle_path" ]]; then
+        echo "error: missing packaged SwiftPM resource bundle at $bundle_path" >&2
+        missing=1
+    fi
+
+    for locale in en ru zh-Hans; do
+        if [[ ! -f "$RESOURCES_PATH/$locale.lproj/Localizable.strings" ]]; then
+            echo "error: missing main localization file for $locale" >&2
+            missing=1
+        fi
+    done
+
+    for locale in en ru zh-hans; do
+        if [[ ! -f "$bundle_path/$locale.lproj/Localizable.strings" ]]; then
+            echo "error: missing SwiftPM bundle localization file for $locale" >&2
+            missing=1
+        fi
+    done
+
+    if (( missing != 0 )); then
+        exit 1
+    fi
+}
+
 echo "Building $APP_DISPLAY_NAME universal bundle for architectures: ${BUILD_ARCHES[*]}"
 for arch in "${BUILD_ARCHES[@]}"; do
     build_arch "$arch"
@@ -196,9 +233,16 @@ cp "$PLIST_PATH" "$CONTENTS_PATH/Info.plist"
 stamp_plist_versions "$CONTENTS_PATH/Info.plist"
 cp "$ICNS_PATH" "$RESOURCES_PATH/AppIcon.icns"
 cp "$SHADER_SOURCE_PATH" "$RESOURCES_PATH/Shaders.metal"
+APP_RESOURCE_BUNDLE_PATH="$(resource_bundle_for_arch "${BUILD_ARCHES[0]}")"
+if [[ ! -d "$APP_RESOURCE_BUNDLE_PATH" ]]; then
+    echo "error: expected SwiftPM resource bundle not found at $APP_RESOURCE_BUNDLE_PATH" >&2
+    exit 1
+fi
+cp -R "$APP_RESOURCE_BUNDLE_PATH" "$RESOURCES_PATH/"
 if [[ -d "$LOCALIZATION_SOURCE_PATH" ]]; then
     find "$LOCALIZATION_SOURCE_PATH" -maxdepth 1 -name "*.lproj" -type d -exec cp -R {} "$RESOURCES_PATH/" \;
 fi
+verify_localization_resources
 codesign --force --deep --sign - "$BUNDLE_PATH" >/dev/null
 codesign --verify --deep --strict "$BUNDLE_PATH" >/dev/null
 
