@@ -155,7 +155,7 @@ private struct GuideRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
+            Text(L10n.string(label))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -220,7 +220,7 @@ private struct ConnectionCard: View {
                 }
 
                 if let lastConnectedAt = connection.lastConnectedAt {
-                    Text("Last connected \(DateFormatters.relativeFormatter().localizedString(for: lastConnectedAt, relativeTo: .now))")
+                    Text(L10n.string("Last connected %@", DateFormatters.relativeFormatter().localizedString(for: lastConnectedAt, relativeTo: .now)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hermes Desktop</title>
   <meta name="description" content="Hermes Desktop is a native macOS workspace for Hermes Agent over SSH. Real terminal, real files, real host state, no gateway layer.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #f3efe7;
@@ -14,6 +17,8 @@
       --line: #111111;
       --accent: #ef4023;
       --accent-ink: #fff8f1;
+      --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "Geist Mono", "SF Mono", "Cascadia Code", monospace;
     }
 
     * { box-sizing: border-box; }
@@ -26,7 +31,7 @@
         linear-gradient(180deg, rgba(239, 64, 35, 0.06), transparent 16rem),
         var(--bg);
       color: var(--ink);
-      font-family: "IBM Plex Sans", "Aptos", "Segoe UI", sans-serif;
+      font-family: var(--font-sans);
       line-height: 1.55;
     }
 
@@ -61,7 +66,7 @@
     }
 
     .brand {
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       font-size: 0.95rem;
       font-weight: 700;
       letter-spacing: 0.08em;
@@ -80,7 +85,7 @@
     }
 
     .topnav a {
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -96,7 +101,7 @@
       border: 3px solid var(--line);
       background: var(--accent);
       color: var(--accent-ink);
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       font-size: 0.82rem;
       font-weight: 700;
       text-transform: uppercase;
@@ -142,7 +147,7 @@
 
     .kicker,
     .micro {
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       font-size: 0.76rem;
       text-transform: uppercase;
       letter-spacing: 0.08em;
@@ -338,7 +343,7 @@
     }
 
     code {
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       font-size: 0.92em;
       background: rgba(17, 17, 17, 0.08);
       padding: 0.12rem 0.35rem;
@@ -348,7 +353,7 @@
       margin-top: 1rem;
       padding: 1rem;
       border: 3px solid currentColor;
-      font-family: "IBM Plex Mono", "SF Mono", monospace;
+      font-family: var(--font-mono);
       background: rgba(0, 0, 0, 0.18);
       white-space: pre-wrap;
       word-break: break-word;
@@ -416,12 +421,12 @@
         <h1>Stay close to the <span class="hero-accent">host</span>.</h1>
         <p>
           Hermes Desktop is a native Mac app for Hermes. It brings the core
-          Hermes workflow into one calm, focused place on macOS while keeping
+          workflow into one calm, focused place on macOS, with
           the host as the source of truth.
         </p>
         <div class="hero-actions">
           <a class="cta" href="https://github.com/dodo-reach/hermes-desktop/releases">Download Release</a>
-          <a class="cta secondary" href="https://github.com/dodo-reach/hermes-desktop">View Source</a>
+          <a class="cta secondary" href="https://github.com/dodo-reach/hermes-desktop">View source</a>
         </div>
       </div>
 
@@ -430,7 +435,7 @@
           <div class="micro">Product stance</div>
           <strong>One host.<br>One truth.</strong>
           <p>
-            Direct connection. Real host state. No extra layer in between.
+            Direct connection. Real host state. No extra layer.
           </p>
         </div>
 
@@ -454,7 +459,7 @@
           <div class="micro">Why this exists</div>
           <p>
             Hermes Desktop is for people who want Hermes to feel natural on a
-            Mac without changing how Hermes actually works.
+            Mac without changing how Hermes works.
           </p>
         </div>
       </div>
@@ -493,7 +498,7 @@
         <div class="card">
           <div class="micro">Scope</div>
           <p>
-            Hermes Desktop focuses on the workflows that matter most in regular
+            Hermes Desktop focuses on the workflows that matter most in daily
             use: terminal, sessions, files, usage, skills, and cron jobs.
           </p>
         </div>
@@ -518,7 +523,7 @@
           <div class="micro">Canonical files</div>
           <h3>Files that matter</h3>
           <p>
-            Open and edit the key Hermes files without losing track of where
+            Open and edit key Hermes files without losing track of where
             they live.
           </p>
         </div>
@@ -526,7 +531,7 @@
           <div class="micro">Sessions</div>
           <h3>Session history</h3>
           <p>
-            Browse what happened, search it quickly, and stay oriented.
+            Browse session history, search quickly, and stay oriented.
           </p>
         </div>
         <div class="card">
@@ -552,8 +557,8 @@
       <div class="quote">
         <div class="micro">Positioning</div>
         <p>
-          Hermes Desktop keeps the host in charge and makes daily work on macOS
-          feel better.
+          Hermes Desktop keeps the host in charge while making daily macOS work
+          easier.
         </p>
       </div>
     </section>
@@ -599,14 +604,14 @@
         <div class="card">
           <div class="micro">Preview</div>
           <p>
-            Screenshots from the actual app, kept safe for a public repo.
+            Screenshots from the actual app, sanitized for a public repo.
           </p>
         </div>
       </div>
 
       <div class="gallery">
         <article class="shot">
-          <img src="assets/CRON-JOBS.png" alt="Hermes Desktop Cron Jobs view">
+          <img src="assets/CRON-JOBS.png" alt="Hermes Desktop cron jobs view">
           <div class="shot-copy">
             <div class="micro">Cron jobs</div>
             <h3>Cron jobs</h3>
@@ -614,7 +619,7 @@
           </div>
         </article>
         <article class="shot">
-          <img src="assets/USAGE.png" alt="Hermes Desktop Usage view">
+          <img src="assets/USAGE.png" alt="Hermes Desktop usage view">
           <div class="shot-copy">
             <div class="micro">Usage</div>
             <h3>Usage</h3>
@@ -622,7 +627,7 @@
           </div>
         </article>
         <article class="shot">
-          <img src="assets/SKILLS.png" alt="Hermes Desktop Skills view">
+          <img src="assets/SKILLS.png" alt="Hermes Desktop skills view">
           <div class="shot-copy">
             <div class="micro">Skills</div>
             <h3>Skills</h3>
@@ -630,7 +635,7 @@
           </div>
         </article>
         <article class="shot">
-          <img src="assets/TERMINALE.png" alt="Hermes Desktop Terminal view">
+          <img src="assets/TERMINALE.png" alt="Hermes Desktop terminal view">
           <div class="shot-copy">
             <div class="micro">Terminal</div>
             <h3>Terminal</h3>
@@ -664,7 +669,7 @@
       <div>
         <div class="micro">Hermes Desktop</div>
         <h3>Open source. Native. Host-first.</h3>
-        <p>A native Mac app for people who want Hermes to stay direct, simple, and close to the host.</p>
+        <p>A native Mac app that keeps Hermes direct, simple, and close to the host.</p>
       </div>
       <div class="hero-actions">
         <a class="cta" href="https://github.com/dodo-reach/hermes-desktop">GitHub</a>

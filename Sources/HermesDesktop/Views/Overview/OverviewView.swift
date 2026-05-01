@@ -44,11 +44,11 @@ struct OverviewView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Overview")
+                Text(L10n.string("Overview"))
                     .font(.largeTitle)
                     .fontWeight(.semibold)
 
-                Text("See which host Hermes is connected to, where its files live, and which source powers Sessions, Cron Jobs, and Usage.")
+                Text(L10n.string("See which host Hermes is connected to, where its files live, and which source powers Sessions, Cron Jobs, and Usage."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -180,7 +180,7 @@ struct OverviewView: View {
 
                 if !overview.availableProfiles.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Discovered profiles")
+                        Text(L10n.string("Discovered profiles"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -288,10 +288,10 @@ struct OverviewView: View {
                             .foregroundStyle(Color.accentColor)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("SQLite database detected")
+                            Text(L10n.string("SQLite database detected"))
                                 .font(.headline)
 
-                            Text("Hermes can read structured session and message records directly.")
+                            Text(L10n.string("Hermes can read structured session and message records directly."))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -333,10 +333,10 @@ struct OverviewView: View {
                             .foregroundStyle(.secondary)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Using transcript files")
+                            Text(L10n.string("Using transcript files"))
                                 .font(.headline)
 
-                            Text("No SQLite database was found, so Hermes will fall back to session transcript artifacts when available.")
+                            Text(L10n.string("No SQLite database was found, so Hermes will fall back to session transcript artifacts when available."))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -397,10 +397,10 @@ private struct OverviewPanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(title)
+                Text(L10n.string(title))
                     .font(.headline)
 
-                Text(subtitle)
+                Text(L10n.string(subtitle))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -430,7 +430,7 @@ private struct OverviewDetailBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
+            Text(L10n.string(label))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -459,7 +459,7 @@ private struct OverviewPathRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
-                Text(title)
+                Text(L10n.string(title))
                     .font(.headline)
 
                 OverviewBadge(text: badge, tint: .secondary)
@@ -499,12 +499,12 @@ private struct OverviewStatusRow: View {
             Image(systemName: item.isReady ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                 .foregroundStyle(item.isReady ? .green : .orange)
 
-            Text(item.title)
+            Text(L10n.string(item.title))
                 .font(.subheadline)
 
             Spacer()
 
-            Text(item.isReady ? "Ready" : "Missing")
+            Text(L10n.string(item.isReady ? "Ready" : "Missing"))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(item.isReady ? .green : .orange)
         }
@@ -516,7 +516,7 @@ private struct OverviewBadge: View {
     let tint: Color
 
     var body: some View {
-        Text(text)
+        Text(L10n.string(text))
             .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
