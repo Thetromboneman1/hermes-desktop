@@ -13,6 +13,9 @@ workflow token cannot introduce upstream workflow-file changes. The sync job
 still runs the merged Swift suite, so upstream application changes receive
 equivalent build and test coverage.
 
+Pushes and pull requests also run the downstream contract and complete Swift
+suite through `Repository Validation` on a macOS runner.
+
 The weekly and manual upstream workflow fetches with three bounded attempts,
 merges into `automation/upstream-sync-<sha>`, runs the complete Swift test
 suite on macOS, and opens or reuses a pull request. It never force-pushes or
