@@ -9,9 +9,8 @@ downstream:
   branch: main
   validation_script: scripts/validate-downstream.sh
 intentional_differences:
+  - .github/workflows/
   - .github/downstream-config-manifest.yml
-  - .github/workflows/deploy-pages.yml
-  - .github/workflows/upstream-sync.yml
   - AI-Integration.md
   - Operations.md
   - docs/repository-maintenance.md
@@ -22,5 +21,6 @@ preserved_contract:
   transport: direct SSH; preserve upstream direct-local extension during sync
   canonical_state: remote Hermes host
   local_mirror: false
+  workflow_overlay: preserve downstream .github/workflows
 secret_references:
   - GITHUB_TOKEN

@@ -7,6 +7,12 @@ Last audited: 2026-07-26
 `main`. Downstream files are limited to the governance workflow and manifest,
 Pages pinning, and the `AI-Integration.md` and `Operations.md` notes.
 
+`.github/workflows/` is an intentional downstream overlay. The synchronization
+merge restores that directory from downstream before pushing because GitHub's
+workflow token cannot introduce upstream workflow-file changes. The sync job
+still runs the merged Swift suite, so upstream application changes receive
+equivalent build and test coverage.
+
 The weekly and manual upstream workflow fetches with three bounded attempts,
 merges into `automation/upstream-sync-<sha>`, runs the complete Swift test
 suite on macOS, and opens or reuses a pull request. It never force-pushes or

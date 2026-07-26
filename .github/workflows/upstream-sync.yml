@@ -57,6 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          base_sha=$(git rev-parse HEAD)
           if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
             {
               echo "changed=false"
@@ -94,6 +95,11 @@ jobs:
             git merge --abort
             exit 0
           fi
+          # GITHUB_TOKEN cannot push upstream-authored workflow changes. The
+          # downstream workflow directory is a reviewed overlay, and this job
+          # provides equivalent merged-source Swift validation.
+          git restore --source="$base_sha" --staged --worktree .github/workflows
+          git commit --amend --no-edit
           {
             echo "changed=true"
             echo "conflict=false"
