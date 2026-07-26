@@ -9,6 +9,7 @@ struct RemoteDiscovery: Codable {
     let paths: RemoteHermesPaths
     let exists: RemoteHermesPathExistence
     let sessionStore: RemoteSessionStore?
+    let kanban: RemoteKanbanDiscovery?
 
     enum CodingKeys: String, CodingKey {
         case ok
@@ -19,6 +20,7 @@ struct RemoteDiscovery: Codable {
         case paths
         case exists
         case sessionStore = "session_store"
+        case kanban
     }
 }
 
@@ -44,6 +46,7 @@ struct RemoteHermesPaths: Codable {
     let soul: String
     let sessionsDir: String
     let cronJobs: String
+    let kanbanDatabase: String?
 
     enum CodingKeys: String, CodingKey {
         case user
@@ -51,6 +54,7 @@ struct RemoteHermesPaths: Codable {
         case soul
         case sessionsDir = "sessions_dir"
         case cronJobs = "cron_jobs"
+        case kanbanDatabase = "kanban_database"
     }
 }
 
@@ -60,6 +64,7 @@ struct RemoteHermesPathExistence: Codable {
     let soul: Bool
     let sessionsDir: Bool
     let cronJobs: Bool
+    let kanbanDatabase: Bool?
 
     enum CodingKeys: String, CodingKey {
         case user
@@ -67,6 +72,7 @@ struct RemoteHermesPathExistence: Codable {
         case soul
         case sessionsDir = "sessions_dir"
         case cronJobs = "cron_jobs"
+        case kanbanDatabase = "kanban_database"
     }
 }
 
@@ -81,6 +87,24 @@ struct RemoteSessionStore: Codable {
         case path
         case sessionTable = "session_table"
         case messageTable = "message_table"
+    }
+}
+
+struct RemoteKanbanDiscovery: Codable, Hashable {
+    let databasePath: String
+    let exists: Bool
+    let hostWide: Bool
+    let hasHermesCLI: Bool
+    let hasKanbanModule: Bool
+    let dispatcher: KanbanDispatcherStatus?
+
+    enum CodingKeys: String, CodingKey {
+        case databasePath = "database_path"
+        case exists
+        case hostWide = "host_wide"
+        case hasHermesCLI = "has_hermes_cli"
+        case hasKanbanModule = "has_kanban_module"
+        case dispatcher
     }
 }
 

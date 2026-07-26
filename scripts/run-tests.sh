@@ -50,29 +50,45 @@ pick_frameworks_dir() {
     developer_dir="$(xcode-select -p 2>/dev/null || true)"
 
     if [[ -n "$developer_dir" && "$developer_dir" != "/Library/Developer/CommandLineTools" ]]; then
-        printf '%s\n' "$developer_dir/Library/Developer/Frameworks"
+        local xcode_frameworks_dir="$developer_dir/Library/Developer/Frameworks"
+        if [[ -d "$xcode_frameworks_dir" ]]; then
+            printf '%s\n' "$xcode_frameworks_dir"
+        fi
         return
     fi
 
-    printf '%s\n' "/Library/Developer/CommandLineTools/Library/Developer/Frameworks"
+    local clt_frameworks_dir="/Library/Developer/CommandLineTools/Library/Developer/Frameworks"
+    if [[ -d "$clt_frameworks_dir" ]]; then
+        printf '%s\n' "$clt_frameworks_dir"
+    fi
 }
 
 BUILD_SDK="$(pick_sdk)"
 FRAMEWORKS_DIR="$(pick_frameworks_dir)"
+TEST_ENV=(
+    "CLANG_MODULE_CACHE_PATH=$SWIFTPM_HOME/module-cache"
+    "SDKROOT=$BUILD_SDK"
+)
+SWIFT_TEST_ARGS=(
+    test
+    --disable-sandbox
+    --manifest-cache local
+    --cache-path "$SWIFTPM_HOME/cache"
+    --config-path "$SWIFTPM_HOME/configuration"
+    --security-path "$SWIFTPM_HOME/security"
+    --scratch-path "$SCRATCH_PATH"
+)
 
-CLANG_MODULE_CACHE_PATH="$SWIFTPM_HOME/module-cache" \
-SDKROOT="$BUILD_SDK" \
-DYLD_FRAMEWORK_PATH="$FRAMEWORKS_DIR" \
-swift test \
-    --disable-sandbox \
-    --manifest-cache local \
-    --cache-path "$SWIFTPM_HOME/cache" \
-    --config-path "$SWIFTPM_HOME/configuration" \
-    --security-path "$SWIFTPM_HOME/security" \
-    --scratch-path "$SCRATCH_PATH" \
-    -Xswiftc -F \
-    -Xswiftc "$FRAMEWORKS_DIR" \
-    -Xlinker -F \
-    -Xlinker "$FRAMEWORKS_DIR" \
-    -Xlinker -rpath \
-    -Xlinker "$FRAMEWORKS_DIR"
+if [[ -n "$FRAMEWORKS_DIR" ]]; then
+    TEST_ENV+=("DYLD_FRAMEWORK_PATH=$FRAMEWORKS_DIR")
+    SWIFT_TEST_ARGS+=(
+        -Xswiftc -F
+        -Xswiftc "$FRAMEWORKS_DIR"
+        -Xlinker -F
+        -Xlinker "$FRAMEWORKS_DIR"
+        -Xlinker -rpath
+        -Xlinker "$FRAMEWORKS_DIR"
+    )
+fi
+
+env "${TEST_ENV[@]}" swift "${SWIFT_TEST_ARGS[@]}"

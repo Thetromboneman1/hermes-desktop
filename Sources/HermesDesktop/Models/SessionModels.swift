@@ -1,6 +1,6 @@
 import Foundation
 
-struct SessionListPage: Codable {
+struct SessionListPage: Codable, Sendable {
     let ok: Bool
     let items: [SessionSummary]
     let totalCount: Int
@@ -12,32 +12,120 @@ struct SessionListPage: Codable {
     }
 }
 
-struct SessionSummary: Codable, Identifiable, Hashable, TitleIdentifiable, OptionalModelDisplayable {
+struct SessionSummary: Codable, Identifiable, Hashable, Sendable, TitleIdentifiable, OptionalModelDisplayable {
     let id: String
     let title: String?
     let model: String?
+    let parentSessionID: String?
     let startedAt: SessionTimestamp?
     let lastActive: SessionTimestamp?
     let messageCount: Int?
     let preview: String?
+    let searchMatch: SessionSearchMatch?
 
     enum CodingKeys: String, CodingKey {
         case id
         case title
         case model
+        case parentSessionID = "parent_session_id"
         case startedAt = "started_at"
         case lastActive = "last_active"
         case messageCount = "message_count"
         case preview
+        case searchMatch = "search_match"
+    }
+
+    init(
+        id: String,
+        title: String?,
+        model: String?,
+        parentSessionID: String? = nil,
+        startedAt: SessionTimestamp?,
+        lastActive: SessionTimestamp?,
+        messageCount: Int?,
+        preview: String?,
+        searchMatch: SessionSearchMatch? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.model = model
+        self.parentSessionID = parentSessionID
+        self.startedAt = startedAt
+        self.lastActive = lastActive
+        self.messageCount = messageCount
+        self.preview = preview
+        self.searchMatch = searchMatch
     }
 }
 
-struct SessionDetailResponse: Codable {
+struct SessionSearchMatch: Codable, Hashable, Sendable {
+    let matchCount: Int
+    let messageID: String?
+    let role: SessionMessageRole?
+    let timestamp: SessionTimestamp?
+    let snippet: String?
+
+    enum CodingKeys: String, CodingKey {
+        case matchCount = "match_count"
+        case messageID = "message_id"
+        case role
+        case timestamp
+        case snippet
+    }
+}
+
+struct PinnedSession: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let workspaceScopeFingerprint: String
+    var title: String?
+    var model: String?
+    var parentSessionID: String?
+    var startedAt: SessionTimestamp?
+    var lastActive: SessionTimestamp?
+    var messageCount: Int?
+    var preview: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(
+        session: SessionSummary,
+        workspaceScopeFingerprint: String,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = session.id
+        self.workspaceScopeFingerprint = workspaceScopeFingerprint
+        self.title = session.title
+        self.model = session.model
+        self.parentSessionID = session.parentSessionID
+        self.startedAt = session.startedAt
+        self.lastActive = session.lastActive
+        self.messageCount = session.messageCount
+        self.preview = session.preview
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var summary: SessionSummary {
+        SessionSummary(
+            id: id,
+            title: title,
+            model: model,
+            parentSessionID: parentSessionID,
+            startedAt: startedAt,
+            lastActive: lastActive,
+            messageCount: messageCount,
+            preview: preview
+        )
+    }
+}
+
+struct SessionDetailResponse: Codable, Sendable {
     let ok: Bool
     let items: [SessionMessage]
 }
 
-struct SessionMessage: Codable, Identifiable, Hashable {
+struct SessionMessage: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let role: SessionMessageRole
     let content: String?
@@ -50,6 +138,20 @@ struct SessionMessage: Codable, Identifiable, Hashable {
         case content
         case timestamp
         case metadata
+    }
+
+    init(
+        id: String,
+        role: SessionMessageRole,
+        content: String?,
+        timestamp: SessionTimestamp? = nil,
+        metadata: [String: JSONValue]? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.timestamp = timestamp
+        self.metadata = metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -66,12 +168,104 @@ struct SessionMessage: Codable, Identifiable, Hashable {
             return nil
         }
 
-        let filtered = metadata.compactMapValues { $0.removingNulls }
+        var filtered = metadata.compactMapValues { $0.removingNulls }
+        filtered.removeRedundantReasoningContent()
         return filtered.isEmpty ? nil : filtered
     }
 }
 
-enum SessionTimestamp: Codable, Hashable {
+struct SessionMessageDisplay: Identifiable, Hashable, Sendable {
+    let id: String
+    let role: SessionMessageRole
+    let content: String?
+    let timestampText: String?
+    let metadataItems: [SessionMetadataDisplayItem]
+    let toolSummary: SessionToolMessageSummary?
+    let isStreaming: Bool
+
+    init(
+        id: String,
+        role: SessionMessageRole,
+        content: String?,
+        timestampText: String? = nil,
+        metadataItems: [SessionMetadataDisplayItem] = [],
+        toolSummary: SessionToolMessageSummary? = nil,
+        isStreaming: Bool = false
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.timestampText = timestampText
+        self.metadataItems = metadataItems
+        self.toolSummary = toolSummary
+        self.isStreaming = isStreaming
+    }
+
+    init(message: SessionMessage) {
+        id = message.id
+        role = message.role
+        content = message.content?.strippingTerminalControlArtifacts
+        timestampText = message.timestamp?.dateValue.map(DateFormatters.shortDateTimeString(from:))
+
+        let displayMetadata = message.displayMetadata ?? [:]
+        metadataItems = displayMetadata.keys.sorted().compactMap { key in
+            guard let value = displayMetadata[key] else { return nil }
+            return SessionMetadataDisplayItem(key: key, value: value)
+        }
+        toolSummary = message.role.isToolRole
+            ? SessionToolMessageSummary(content: message.content)
+            : nil
+        isStreaming = false
+    }
+
+    var isToolMessage: Bool {
+        toolSummary != nil
+    }
+}
+
+private extension String {
+    var strippingTerminalControlArtifacts: String {
+        var cleaned = self
+        let escape = "\u{001B}"
+        let bell = "\u{0007}"
+        cleaned = cleaned.replacingOccurrences(
+            of: "\(escape)\\][^\(bell)\(escape)]*(?:\(bell)|\(escape)\\\\)",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "\(escape)\\[[0-?]*[ -/]*[@-~]",
+            with: "",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?m)(^|\\s)(?:\\d{1,3}m;?){2,}(?:\\s+|(?=[.,:!?)]|$))",
+            with: "$1",
+            options: .regularExpression
+        )
+        cleaned = cleaned.replacingOccurrences(
+            of: "(?m)(^|\\s)(?:\\d{1,3};){1,8}\\d{1,3}m(?:\\s+|(?=[.,:!?)]|$))",
+            with: "$1",
+            options: .regularExpression
+        )
+        return cleaned
+    }
+}
+
+struct SessionMetadataDisplayItem: Identifiable, Hashable, Sendable {
+    let key: String
+    let value: JSONValue
+
+    var id: String {
+        key
+    }
+
+    var displayValue: String {
+        value.displayString
+    }
+}
+
+enum SessionTimestamp: Codable, Hashable, Sendable {
     case unixSeconds(Double)
     case text(String)
 
@@ -116,7 +310,230 @@ enum SessionTimestamp: Codable, Hashable {
     }
 }
 
-enum SessionMessageRole: Codable, Hashable {
+struct SessionToolMessageSummary: Hashable, Sendable {
+    let title: String
+    let preview: String?
+    let statusText: String?
+    let statusKind: SessionToolStatusKind
+    let sizeText: String?
+    let isDetailPreviewTruncated: Bool
+
+    private static let jsonParseByteLimit = 256 * 1024
+    private static let collapsedPreviewCharacterLimit = 220
+    static let detailPreviewCharacterLimit = 5_000
+
+    init(
+        title: String,
+        preview: String?,
+        statusText: String?,
+        statusKind: SessionToolStatusKind,
+        sizeText: String? = nil,
+        isDetailPreviewTruncated: Bool = false
+    ) {
+        self.title = title
+        self.preview = preview
+        self.statusText = statusText
+        self.statusKind = statusKind
+        self.sizeText = sizeText
+        self.isDetailPreviewTruncated = isDetailPreviewTruncated
+    }
+
+    init(content: String?) {
+        let byteCount = content?.utf8.count ?? 0
+        sizeText = byteCount > 0 ? Self.formattedByteCount(byteCount) : nil
+
+        if let content, !content.isEmpty {
+            isDetailPreviewTruncated = Self.isDetailPreviewTruncated(content)
+        } else {
+            isDetailPreviewTruncated = false
+        }
+
+        guard let content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            title = L10n.string("Tool turn")
+            preview = nil
+            statusText = nil
+            statusKind = .neutral
+            return
+        }
+
+        let payload = Self.jsonPayload(from: content)
+        statusKind = Self.statusKind(from: payload)
+        statusText = Self.statusText(for: statusKind, payload: payload)
+        title = Self.title(from: payload) ?? L10n.string("Tool output")
+        preview = Self.preview(from: payload) ?? Self.snippet(from: content)
+    }
+
+    private static func jsonPayload(from content: String) -> [String: Any]? {
+        guard content.utf8.count <= jsonParseByteLimit,
+              let data = content.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data),
+              let payload = object as? [String: Any] else {
+            return nil
+        }
+
+        return payload
+    }
+
+    private static func statusKind(from payload: [String: Any]?) -> SessionToolStatusKind {
+        guard let payload else { return .neutral }
+
+        if let success = payload["success"] as? Bool {
+            return success ? .success : .failure
+        }
+
+        if let exitCode = payload["exit_code"] as? Int {
+            return exitCode == 0 ? .success : .failure
+        }
+
+        if let error = stringValue(payload["error"]), !error.isEmpty {
+            return .failure
+        }
+
+        return .neutral
+    }
+
+    private static func statusText(for statusKind: SessionToolStatusKind, payload: [String: Any]?) -> String? {
+        switch statusKind {
+        case .success:
+            return L10n.string("Succeeded")
+        case .failure:
+            return L10n.string("Failed")
+        case .neutral:
+            guard let payload,
+                  let exitCode = payload["exit_code"] as? Int else {
+                return nil
+            }
+            return L10n.string("Exit %@", "\(exitCode)")
+        }
+    }
+
+    private static func title(from payload: [String: Any]?) -> String? {
+        guard let payload else { return nil }
+
+        if let files = payload["files_modified"] as? [String], !files.isEmpty {
+            if files.count == 1, let fileName = files.first?.split(separator: "/").last {
+                return L10n.string("Modified %@", String(fileName))
+            }
+
+            return L10n.string("Modified %@ files", "\(files.count)")
+        }
+
+        if let lint = payload["lint"] as? [String: Any],
+           let status = stringValue(lint["status"]),
+           !status.isEmpty {
+            return L10n.string("Lint %@", status)
+        }
+
+        if let error = stringValue(payload["error"]), !error.isEmpty {
+            return L10n.string("Tool error")
+        }
+
+        if let diff = stringValue(payload["diff"]), !diff.isEmpty {
+            return L10n.string("Tool diff")
+        }
+
+        if let output = stringValue(payload["output"]), !output.isEmpty {
+            return L10n.string("Tool output")
+        }
+
+        return nil
+    }
+
+    private static func preview(from payload: [String: Any]?) -> String? {
+        guard let payload else { return nil }
+
+        if let error = stringValue(payload["error"]), let snippet = snippet(from: error) {
+            return snippet
+        }
+
+        if let output = stringValue(payload["output"]), let snippet = snippet(from: output) {
+            return snippet
+        }
+
+        if let diff = stringValue(payload["diff"]), let snippet = snippet(from: diff) {
+            return snippet
+        }
+
+        return nil
+    }
+
+    private static func stringValue(_ value: Any?) -> String? {
+        switch value {
+        case let string as String:
+            return string.trimmingCharacters(in: .whitespacesAndNewlines)
+        case let number as NSNumber:
+            return number.stringValue
+        case .none:
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private static func snippet(from text: String) -> String? {
+        let seed = String(text.prefix(collapsedPreviewCharacterLimit * 4))
+        let normalized = seed
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !normalized.isEmpty else { return nil }
+        guard normalized.count > collapsedPreviewCharacterLimit else { return normalized }
+
+        return String(normalized.prefix(collapsedPreviewCharacterLimit - 3)) + "..."
+    }
+
+    static func detailPreview(from content: String?) -> String? {
+        guard let content, !content.isEmpty else { return nil }
+        let endIndex = content.index(
+            content.startIndex,
+            offsetBy: detailPreviewCharacterLimit,
+            limitedBy: content.endIndex
+        ) ?? content.endIndex
+        return String(content[..<endIndex])
+    }
+
+    private static func isDetailPreviewTruncated(_ content: String) -> Bool {
+        guard let limitIndex = content.index(
+            content.startIndex,
+            offsetBy: detailPreviewCharacterLimit,
+            limitedBy: content.endIndex
+        ) else {
+            return false
+        }
+        return limitIndex < content.endIndex
+    }
+
+    private static func formattedByteCount(_ byteCount: Int) -> String {
+        if byteCount < 1_024 {
+            return "\(byteCount) B"
+        }
+
+        if byteCount < 1_024 * 1_024 {
+            return "\(formattedDecimal(Double(byteCount) / 1_024)) KB"
+        }
+
+        return "\(formattedDecimal(Double(byteCount) / Double(1_024 * 1_024))) MB"
+    }
+
+    private static func formattedDecimal(_ value: Double) -> String {
+        let tenths = Int((value * 10).rounded())
+        if tenths % 10 == 0 {
+            return "\(tenths / 10)"
+        }
+
+        return "\(tenths / 10).\(tenths % 10)"
+    }
+}
+
+enum SessionToolStatusKind: Hashable, Sendable {
+    case success
+    case failure
+    case neutral
+}
+
+enum SessionMessageRole: Codable, Hashable, Sendable {
     case assistant
     case user
     case system
@@ -136,7 +553,7 @@ enum SessionMessageRole: Codable, Hashable {
     var displayTitle: String {
         switch self {
         case .assistant:
-            return "Assistant"
+            return "Agent"
         case .user:
             return "User"
         case .system:
@@ -148,6 +565,27 @@ enum SessionMessageRole: Codable, Hashable {
             guard !trimmed.isEmpty else { return "Event" }
             return trimmed.replacingOccurrences(of: "_", with: " ").capitalized
         }
+    }
+
+    var isToolRole: Bool {
+        switch self {
+        case .custom(let value):
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return [
+                "function",
+                "function_call",
+                "function_result",
+                "tool",
+                "tool_call",
+                "tool_result"
+            ].contains(normalized)
+        case .assistant, .user, .system, .event:
+            return false
+        }
+    }
+
+    init(remoteValue: String) {
+        self = Self(decodedValue: remoteValue)
     }
 
     private init(decodedValue: String) {
@@ -182,7 +620,7 @@ enum SessionMessageRole: Codable, Hashable {
     }
 }
 
-enum JSONValue: Codable, Hashable {
+enum JSONValue: Codable, Hashable, Sendable {
     case string(String)
     case number(Double)
     case int(Int)
@@ -300,5 +738,24 @@ enum JSONValue: Codable, Hashable {
         default:
             return self
         }
+    }
+}
+
+private extension Dictionary where Key == String, Value == JSONValue {
+    mutating func removeRedundantReasoningContent() {
+        guard let reasoning = self["reasoning"]?.normalizedMetadataText,
+              let reasoningContent = self["reasoning_content"]?.normalizedMetadataText,
+              reasoning == reasoningContent else {
+            return
+        }
+
+        removeValue(forKey: "reasoning_content")
+    }
+}
+
+private extension JSONValue {
+    var normalizedMetadataText: String? {
+        let trimmed = displayString.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

@@ -6,24 +6,15 @@ struct UsageView: View {
     private let topRankingPanelHeight: CGFloat = 490
 
     var body: some View {
-        ScrollView {
+        HermesPageContainer(width: .analytics) {
             VStack(alignment: .leading, spacing: 24) {
                 HermesPageHeader(
                     title: "Usage",
-                    subtitle: "The main cards and charts on this page are for the active Hermes profile. When more than one profile is discovered on the same host, a separate panel shows total token consumption across all profiles."
-                ) {
-                    HermesRefreshButton(isRefreshing: appState.isRefreshingUsage) {
-                        Task { await appState.refreshUsage() }
-                    }
-                    .disabled(appState.isLoadingUsage)
-                }
+                    subtitle: "The main cards and charts show input/output tokens for the active Hermes profile. When more than one profile is discovered, the host-wide panel shows all-categories tokens across readable profiles."
+                )
 
                 usageContent
             }
-            .frame(maxWidth: 1080, alignment: .leading)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 26)
-            .frame(maxWidth: .infinity, alignment: .top)
             .overlay(alignment: .topTrailing) {
                 if appState.isLoadingUsage && !appState.isRefreshingUsage && appState.usageSummary != nil {
                     HermesLoadingOverlay()
@@ -150,49 +141,69 @@ struct UsageView: View {
     }
 
     private func activeProfileScopePanel(summary: UsageSummary) -> some View {
-        HermesSurfacePanel(
-            title: "Active Profile",
-            subtitle: "Everything below stays scoped to the currently selected Hermes profile."
-        ) {
-            HStack(alignment: .top, spacing: 12) {
-                HermesInsetSurface {
+        HermesSurfacePanel {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Profile")
-                            .font(.caption)
+                        Text(L10n.string("Active Profile"))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
 
                         Text(appState.activeConnection?.resolvedHermesProfileName ?? "default")
-                            .font(.headline)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
-                }
-                .frame(maxWidth: .infinity)
 
-                HermesInsetSurface {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Current Total")
-                            .font(.caption)
+                    Spacer(minLength: 24)
+
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text(L10n.string("Input + Output"))
+                            .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
 
                         Text(UsageNumberFormatter.string(for: summary.totalTokens))
-                            .font(.headline)
+                            .font(.title3.weight(.semibold))
                             .monospacedDigit()
                     }
                 }
-                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.string("Active Profile"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(appState.activeConnection?.resolvedHermesProfileName ?? "default")
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.string("Input + Output"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(UsageNumberFormatter.string(for: summary.totalTokens))
+                            .font(.title3.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                }
             }
         }
     }
 
     private func profileBreakdownPanel(_ breakdown: UsageProfileBreakdown) -> some View {
         HermesSurfacePanel(
-            title: "All Profiles Total Tokens",
-            subtitle: "This panel is host-wide. It combines total token consumption across all readable Hermes profiles on the active host, including input, output, cache, and reasoning. The other cards on this page remain scoped to the active profile."
+            title: "All Profiles Token Breakdown",
+            subtitle: "Host-wide all-categories view. It adds input, output, cache, and reasoning tokens across readable profiles; active-profile cards stay input/output focused."
         ) {
             if breakdown.chartProfiles.count < 2 {
                 ContentUnavailableView(
                     "Not enough profile data yet",
                     systemImage: "chart.pie",
-                    description: Text("At least two profiles need readable usage data before the cross-profile breakdown becomes meaningful.")
+                    description: Text(L10n.string("At least two profiles need readable usage data before the cross-profile breakdown becomes meaningful."))
                 )
                 .frame(maxWidth: .infinity, minHeight: 260)
             } else {
@@ -275,7 +286,7 @@ struct UsageView: View {
                 .frame(maxWidth: .infinity)
 
                 UsageMiniStat(
-                    title: "Host-wide Total",
+                    title: "Host-wide All Categories",
                     valueText: UsageNumberFormatter.string(for: breakdown.hostWideAllTokenCategoriesTotal),
                     tint: .primary
                 )
@@ -297,7 +308,7 @@ struct UsageView: View {
                 )
 
                 UsageMiniStat(
-                    title: "Host-wide Total",
+                    title: "Host-wide All Categories",
                     valueText: UsageNumberFormatter.string(for: breakdown.hostWideAllTokenCategoriesTotal),
                     tint: .primary
                 )
@@ -324,8 +335,8 @@ struct UsageView: View {
 
     private func usageHighlightsPanel(summary: UsageSummary) -> some View {
         HermesSurfacePanel(
-            title: "Active Profile Totals",
-            subtitle: "A compact summary of stored session usage for the currently selected Hermes profile."
+            title: "Active Profile Input/Output",
+            subtitle: "A compact summary of stored input and output tokens for the currently selected Hermes profile."
         ) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 12) {
@@ -337,7 +348,7 @@ struct UsageView: View {
                     .frame(maxWidth: .infinity)
 
                     UsageMiniStat(
-                        title: "Total Tokens",
+                        title: "Input + Output",
                         valueText: UsageNumberFormatter.string(for: summary.totalTokens),
                         tint: .primary
                     )
@@ -359,7 +370,7 @@ struct UsageView: View {
                     )
 
                     UsageMiniStat(
-                        title: "Total Tokens",
+                        title: "Input + Output",
                         valueText: UsageNumberFormatter.string(for: summary.totalTokens),
                         tint: .primary
                     )
@@ -427,8 +438,8 @@ struct UsageView: View {
 
     private func topSessionsPanel(summary: UsageSummary) -> some View {
         HermesSurfacePanel(
-            title: "Top 5 Sessions by Tokens",
-            subtitle: "The stored sessions with the highest combined token consumption."
+            title: "Top 5 Sessions by Input/Output",
+            subtitle: "The stored sessions with the highest combined input and output tokens."
         ) {
             if summary.topSessions.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -461,7 +472,7 @@ struct UsageView: View {
 
     private func topModelsPanel(summary: UsageSummary) -> some View {
         HermesSurfacePanel(
-            title: "Top 5 Models by Tokens",
+            title: "Top 5 Models by Input/Output",
             subtitle: "Ranked by input/output tokens. Cache and reasoning stay secondary."
         ) {
             if summary.topModels.isEmpty {
@@ -496,13 +507,13 @@ struct UsageView: View {
     private func recentSessionsChartPanel(summary: UsageSummary) -> some View {
         HermesSurfacePanel(
             title: "Recent Session History",
-            subtitle: "The last 100 stored sessions, shown as token consumption over time."
+            subtitle: "The last 100 stored sessions, shown as input/output tokens over time."
         ) {
             if summary.recentSessions.isEmpty {
                 ContentUnavailableView(
                     "No recent sessions available",
                     systemImage: "chart.bar.xaxis",
-                    description: Text("Recent session usage will appear here once Hermes has stored session data.")
+                    description: Text(L10n.string("Recent session usage will appear here once Hermes has stored session data."))
                 )
                 .frame(maxWidth: .infinity, minHeight: 240)
             } else {
@@ -511,13 +522,13 @@ struct UsageView: View {
                 Chart(Array(summary.recentSessions.enumerated()), id: \.element.id) { index, session in
                     BarMark(
                         x: .value("Session", index + 1),
-                        y: .value("Tokens", session.totalTokens)
+                        y: .value(L10n.string("Input + Output"), session.totalTokens)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                     .foregroundStyle(color(for: session.totalTokens, maxTokens: maxTokens))
                     .accessibilityLabel(session.title ?? session.id)
                     .accessibilityValue(L10n.string(
-                        "%@ total tokens",
+                        "%@ input/output tokens",
                         UsageNumberFormatter.string(for: session.totalTokens)
                     ))
                 }
@@ -550,7 +561,7 @@ struct UsageView: View {
                     }
                 }
                 .chartXAxisLabel(L10n.string("Recent sessions"), position: .bottom, alignment: .center)
-                .chartYAxisLabel(L10n.string("Tokens"), position: .leading)
+                .chartYAxisLabel(L10n.string("Input + Output"), position: .leading)
                 .chartLegend(.hidden)
                 .frame(height: 260)
 
@@ -629,38 +640,39 @@ private struct UsageMetricCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 12) {
-                HermesBadge(text: title, tint: tint)
+                Text(L10n.string(title))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(tint)
 
                 Spacer(minLength: 12)
 
                 Image(systemName: systemImage)
-                    .font(.title2)
-                    .foregroundStyle(tint)
+                    .font(.body)
+                    .foregroundStyle(tint.opacity(0.82))
             }
 
             Text(UsageNumberFormatter.string(for: value))
-                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
 
             Capsule()
-                .fill(tint.opacity(0.85))
-                .frame(height: 6)
+                .fill(tint.opacity(0.56))
+                .frame(height: 3)
         }
-        .padding(18)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
+            RoundedRectangle(cornerRadius: HermesTheme.panelCornerRadius, style: .continuous)
+                .fill(HermesTheme.panelFill)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: HermesTheme.panelCornerRadius, style: .continuous)
                 .strokeBorder(borderTint.opacity(0.10), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
     }
 }
 
@@ -671,7 +683,7 @@ private struct UsageProfileDonutChart: View {
     var body: some View {
         Chart(Array(breakdown.chartProfiles.enumerated()), id: \.element.id) { index, profile in
             SectorMark(
-                angle: .value(L10n.string("All Tokens"), profile.allTokenCategoriesTotal),
+                angle: .value(L10n.string("All Categories"), profile.allTokenCategoriesTotal),
                 innerRadius: .ratio(0.62),
                 angularInset: 2
             )
@@ -679,7 +691,7 @@ private struct UsageProfileDonutChart: View {
             .foregroundStyle(colors[index % colors.count])
             .accessibilityLabel(profile.profileName)
             .accessibilityValue(L10n.string(
-                "%@ total tokens",
+                "%@ all-category tokens",
                 UsageNumberFormatter.string(for: profile.allTokenCategoriesTotal)
             ))
         }
@@ -691,12 +703,12 @@ private struct UsageProfileDonutChart: View {
                     .foregroundStyle(.secondary)
 
                 Text(UsageNumberFormatter.shortString(for: breakdown.hostWideAllTokenCategoriesTotal))
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
-                Text(L10n.string("all profiles total"))
+                Text(L10n.string("all categories"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -715,13 +727,13 @@ private struct UsageProfileLegendRow: View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(color)
-                .frame(width: 10, height: 10)
-                .padding(.top, 5)
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(profile.profileName)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
 
                     if profile.isActiveProfile {
@@ -739,31 +751,34 @@ private struct UsageProfileLegendRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(UsageNumberFormatter.string(for: profile.allTokenCategoriesTotal))
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
+
+                Text(L10n.string("all categories"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 Text(UsageNumberFormatter.percentString(for: total > 0 ? Double(profile.allTokenCategoriesTotal) / Double(total) : 0))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
+            RoundedRectangle(cornerRadius: HermesTheme.rowCornerRadius, style: .continuous)
+                .fill(HermesTheme.rowFill)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: HermesTheme.rowCornerRadius, style: .continuous)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 
     private var profileBreakdownLine: String {
         [
-            L10n.string("Input %@", UsageNumberFormatter.shortString(for: profile.inputTokens)),
-            L10n.string("Output %@", UsageNumberFormatter.shortString(for: profile.outputTokens)),
+            L10n.string("Input/output %@", UsageNumberFormatter.shortString(for: profile.inputOutputTokensTotal)),
             L10n.string("Cache %@", UsageNumberFormatter.shortString(for: profile.cacheTokensTotal)),
             L10n.string("Reasoning %@", UsageNumberFormatter.shortString(for: profile.reasoningTokens))
         ].joined(separator: " · ")
@@ -778,24 +793,24 @@ private struct UsageMiniStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.string(title))
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(tint == .primary ? .secondary : tint)
 
             Text(valueText)
-                .font(.title3.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(.primary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
+            RoundedRectangle(cornerRadius: HermesTheme.rowCornerRadius, style: .continuous)
+                .fill(HermesTheme.insetFill)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(tint.opacity(0.10), lineWidth: 1)
+            RoundedRectangle(cornerRadius: HermesTheme.rowCornerRadius, style: .continuous)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 }
@@ -845,26 +860,26 @@ private struct UsageStackedComparisonBar: View {
     var body: some View {
         GeometryReader { geometry in
             let width = geometry.size.width
-            let inputWidth = max(10, width * inputFraction)
+            let inputWidth = max(summary.inputTokens > 0 ? 10 : 0, width * inputFraction)
             let outputWidth = max(summary.outputTokens > 0 ? 10 : 0, width * outputFraction)
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(Color.secondary.opacity(0.10))
+                    .fill(HermesTheme.rowFill)
 
                 HStack(spacing: 0) {
                     RoundedRectangle(cornerRadius: 999, style: .continuous)
-                        .fill(Color.red.opacity(0.82))
+                        .fill(Color.red.opacity(0.68))
                         .frame(width: inputWidth)
 
                     RoundedRectangle(cornerRadius: 999, style: .continuous)
-                        .fill(Color.yellow.opacity(0.82))
+                        .fill(Color.yellow.opacity(0.68))
                         .frame(width: outputWidth)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 999, style: .continuous))
             }
         }
-        .frame(height: 14)
+        .frame(height: 10)
     }
 }
 
@@ -912,11 +927,11 @@ private struct UsageTopSessionRow: View {
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
+                .fill(HermesTheme.rowFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 }
@@ -956,11 +971,11 @@ private struct UsageTopSessionPlaceholderRow: View {
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.05))
+                .fill(HermesTheme.rowFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.04), lineWidth: 1)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 }
@@ -1035,11 +1050,11 @@ private struct UsageTopModelRow: View {
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.08))
+                .fill(HermesTheme.rowFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 }
@@ -1085,11 +1100,11 @@ private struct UsageTopModelPlaceholderRow: View {
         .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.secondary.opacity(0.05))
+                .fill(HermesTheme.rowFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.04), lineWidth: 1)
+                .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
         }
     }
 }

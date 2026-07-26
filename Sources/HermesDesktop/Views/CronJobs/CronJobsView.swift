@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CronJobsView: View {
     @EnvironmentObject private var appState: AppState
+    @Binding var splitLayout: HermesSplitLayout
 
     @State private var searchText = ""
     @State private var filterMode: CronFilterMode = .all
@@ -17,27 +18,33 @@ struct CronJobsView: View {
     }
 
     var body: some View {
-        HSplitView {
+        HermesCollapsibleHSplitView(layout: $splitLayout, detailMinWidth: HermesSplitMetrics.WorkbenchDetail.minWidth) {
             VStack(alignment: .leading, spacing: 18) {
                 HermesPageHeader(
                     title: "Cron Jobs",
                     subtitle: "Browse, create and maintain Hermes jobs discovered on the active host."
                 ) {
-                    HermesRefreshButton(isRefreshing: appState.isRefreshingCronJobs) {
-                        Task { await appState.refreshCronJobs() }
-                    }
-                    .disabled(appState.isLoadingCronJobs || appState.isSavingCronJobDraft)
+                    HermesExpandableSearchField(
+                        text: $searchText,
+                        prompt: L10n.string("Search jobs"),
+                        expandedWidth: 220,
+                        focusRequestID: appState.searchFocusRequestID
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
                 }
 
                 filterBar
                 jobsContent
             }
-            .frame(minWidth: 300, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 20)
             .padding(.vertical, 20)
-
+        } detail: {
             detailContent
-                .frame(minWidth: 460, idealWidth: 580, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .hermesSplitDetailColumn(
+                    minWidth: HermesSplitMetrics.WorkbenchDetail.minWidth,
+                    idealWidth: HermesSplitMetrics.WorkbenchDetail.formIdealWidth
+                )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: appState.activeConnectionID) {
@@ -45,49 +52,38 @@ struct CronJobsView: View {
                 await appState.loadCronJobs()
             }
         }
-        .alert("Remove cron job?", isPresented: $showDeleteConfirmation) {
-            Button("Remove", role: .destructive) {
+        .alert(L10n.string("Remove cron job?"), isPresented: $showDeleteConfirmation) {
+            Button(L10n.string("Remove"), role: .destructive) {
                 guard let jobToDelete else { return }
                 Task { await appState.deleteCronJob(jobToDelete) }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(L10n.string("Cancel"), role: .cancel) {}
         } message: {
             if let jobToDelete {
-                Text(L10n.string(
-                    "“%@” will be removed from the remote Hermes scheduler. This cannot be undone.",
-                    jobToDelete.resolvedName
-                ))
+                Text(cronDeleteConfirmation(jobToDelete))
             }
         }
     }
 
     private var filterBar: some View {
-        HStack(spacing: 10) {
-            Picker("Filter", selection: $filterMode) {
+        HermesWrappingFlowLayout(horizontalSpacing: 10, verticalSpacing: 8) {
+            Picker(L10n.string("Filter"), selection: $filterMode) {
                 ForEach(CronFilterMode.allCases, id: \.self) { mode in
                     Text(L10n.string(mode.rawValue)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: 180)
+            .fixedSize(horizontal: true, vertical: false)
 
-            Button {
+            HermesCreateActionButton("New Job", help: "Create a new cron job") {
                 startCreating()
-            } label: {
-                Label("New", systemImage: "plus")
-                    .labelStyle(.iconOnly)
             }
-            .buttonStyle(.borderedProminent)
-            .help(L10n.string("Create a new cron job"))
             .disabled(appState.isSavingCronJobDraft || appState.isOperatingOnCronJob)
-
-            Spacer(minLength: 12)
-
-            HermesExpandableSearchField(
-                text: $searchText,
-                prompt: "Search jobs"
-            )
+            .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -113,7 +109,7 @@ struct CronJobsView: View {
                 ContentUnavailableView(
                     "No cron jobs found",
                     systemImage: "calendar.badge.exclamationmark",
-                    description: Text(L10n.string("No saved Hermes cron jobs were discovered under %@ on this SSH target.", cronJobsPath))
+                    description: Text(noCronJobsDescription)
                 )
                 .frame(maxWidth: .infinity, minHeight: 300)
             }
@@ -133,9 +129,9 @@ struct CronJobsView: View {
 
                     if filteredJobs.isEmpty {
                         ContentUnavailableView(
-                            "No matching cron jobs",
+                            L10n.string("No matching cron jobs"),
                             systemImage: "magnifyingglass",
-                            description: Text("Try searching by title, schedule, skill, model, delivery target or prompt text.")
+                            description: Text(L10n.string("Try searching by title, schedule, skill, model, delivery target or prompt text."))
                         )
                         .frame(maxWidth: .infinity, minHeight: 300)
                     } else {
@@ -163,6 +159,26 @@ struct CronJobsView: View {
                 }
             }
         }
+    }
+
+    private var noCronJobsDescription: String {
+        if appState.activeConnection?.kind == .local {
+            return L10n.string("No saved Hermes cron jobs were discovered under %@ on this Mac.", cronJobsPath)
+        }
+        return L10n.string("No saved Hermes cron jobs were discovered under %@ on this SSH target.", cronJobsPath)
+    }
+
+    private func cronDeleteConfirmation(_ job: CronJob) -> String {
+        if appState.activeConnection?.kind == .local {
+            return L10n.string(
+                "“%@” will be removed from this Mac’s real Hermes scheduler using your current macOS account. This cannot be undone.",
+                job.resolvedName
+            )
+        }
+        return L10n.string(
+            "“%@” will be removed from the remote Hermes scheduler. This cannot be undone.",
+            job.resolvedName
+        )
     }
 
     @ViewBuilder
@@ -235,10 +251,10 @@ struct CronJobsView: View {
         let isFiltering = filterMode != .all || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         if isFiltering {
-            return "Cron Jobs (\(filtered) of \(total))"
+            return L10n.string("Cron Jobs (%@ of %@)", "\(filtered)", "\(total)")
         }
 
-        return "Cron Jobs (\(total))"
+        return L10n.string("Cron Jobs (%@)", "\(total)")
     }
 
     private var cronJobsPath: String {
@@ -335,6 +351,10 @@ private struct CronJobCardRow: View {
                     HStack(spacing: 8) {
                         CronStatusBadge(job: job)
 
+                        if job.noAgent {
+                            HermesBadge(text: "Script", tint: .blue)
+                        }
+
                         if let model = job.displayModel {
                             HermesBadge(text: model, tint: .orange)
                         }
@@ -374,11 +394,11 @@ private struct CronJobCardRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                    .fill(isSelected ? HermesTheme.selectedFill : HermesTheme.rowFill)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isSelected ? 0.12 : 0.06), lineWidth: 1)
+                    .strokeBorder(isSelected ? HermesTheme.selectedStroke : HermesTheme.subtleStroke, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
@@ -436,26 +456,49 @@ private struct CronJobDetailView: View {
                         }
                     }
 
-                    HermesSurfacePanel(
-                        title: "Prompt",
-                        subtitle: "Payload Hermes will run for this scheduled job."
-                    ) {
-                        HermesInsetSurface {
-                            Text(job.trimmedPrompt ?? "No prompt payload saved for this job.")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                    if job.noAgent {
+                        HermesSurfacePanel(
+                            title: "Script",
+                            subtitle: "Script-only jobs run without waking an agent."
+                        ) {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HermesLabeledValue(
+                                    label: "Script path",
+                                    value: job.trimmedScript ?? L10n.string("No script configured"),
+                                    isMonospaced: true
+                                )
+
+                                if let workdir = job.trimmedWorkdir {
+                                    HermesLabeledValue(
+                                        label: "Working directory",
+                                        value: workdir,
+                                        isMonospaced: true
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        HermesSurfacePanel(
+                            title: "Prompt",
+                            subtitle: "Payload Hermes will run for this scheduled job."
+                        ) {
+                            HermesInsetSurface {
+                                Text(job.trimmedPrompt ?? L10n.string("No prompt payload saved for this job."))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            }
                         }
                     }
                 } else {
                     HermesSurfacePanel {
                         ContentUnavailableView(
-                            "Select a cron job",
+                            L10n.string("Select a cron job"),
                             systemImage: "calendar.badge.clock",
-                            description: Text("Choose a Hermes cron job from the active host to inspect it, or create a new one.")
+                            description: Text(L10n.string("Choose a Hermes cron job from the active host to inspect it, or create a new one."))
                         )
                         .frame(maxWidth: .infinity, minHeight: 320)
 
-                        Button("Create Cron Job", action: onCreate)
+                        Button(L10n.string("Create Cron Job"), action: onCreate)
                             .buttonStyle(.borderedProminent)
                     }
                 }
@@ -485,6 +528,10 @@ private struct CronJobDetailView: View {
                     HStack(spacing: 8) {
                         CronStatusBadge(job: job)
 
+                        if job.noAgent {
+                            HermesBadge(text: "Script Only", tint: .blue)
+                        }
+
                         if let model = job.displayModel {
                             HermesBadge(text: model, tint: .orange)
                         }
@@ -493,19 +540,19 @@ private struct CronJobDetailView: View {
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
-                        Button("Edit", action: onEdit)
+                        Button(L10n.string("Edit"), action: onEdit)
                             .buttonStyle(.borderedProminent)
                             .disabled(operationInFlight)
 
-                        Button("Run Now", action: onRunNow)
+                        Button(L10n.string("Run Now"), action: onRunNow)
                             .buttonStyle(.bordered)
                             .disabled(operationInFlight)
 
-                        Button(job.isPaused ? "Resume" : "Pause", action: onTogglePause)
+                        Button(L10n.string(job.isPaused ? "Resume" : "Pause"), action: onTogglePause)
                             .buttonStyle(.bordered)
                             .disabled(operationInFlight)
 
-                        Button("Remove", role: .destructive, action: onDelete)
+                        Button(L10n.string("Remove"), role: .destructive, action: onDelete)
                             .buttonStyle(.bordered)
                             .disabled(operationInFlight)
 
@@ -516,21 +563,21 @@ private struct CronJobDetailView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
-                        Button("Edit", action: onEdit)
+                        Button(L10n.string("Edit"), action: onEdit)
                             .buttonStyle(.borderedProminent)
                             .disabled(operationInFlight)
 
                         HStack(spacing: 8) {
-                            Button("Run Now", action: onRunNow)
+                            Button(L10n.string("Run Now"), action: onRunNow)
                                 .buttonStyle(.bordered)
                                 .disabled(operationInFlight)
 
-                            Button(job.isPaused ? "Resume" : "Pause", action: onTogglePause)
+                            Button(L10n.string(job.isPaused ? "Resume" : "Pause"), action: onTogglePause)
                                 .buttonStyle(.bordered)
                                 .disabled(operationInFlight)
                         }
 
-                        Button("Remove", role: .destructive, action: onDelete)
+                        Button(L10n.string("Remove"), role: .destructive, action: onDelete)
                             .buttonStyle(.bordered)
                             .disabled(operationInFlight)
                     }
@@ -549,6 +596,12 @@ private struct CronJobDetailView: View {
                     label: "Schedule",
                     value: job.resolvedScheduleDisplay,
                     emphasizeValue: true
+                )
+
+                HermesLabeledValue(
+                    label: "Mode",
+                    value: job.executionModeTitle,
+                    emphasizeValue: job.noAgent
                 )
 
                 if let timezone = job.schedule?.timezone {
@@ -696,9 +749,9 @@ private struct CronJobEditorView: View {
                         Task { await onSave() }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isSaving)
+                    .disabled(isSaving || draft.validationError != nil)
 
-                    Button("Cancel", action: onCancel)
+                    Button(L10n.string("Cancel"), action: onCancel)
                         .buttonStyle(.bordered)
                         .disabled(isSaving)
 
@@ -706,6 +759,10 @@ private struct CronJobEditorView: View {
                         ProgressView()
                             .controlSize(.small)
                     }
+                }
+
+                if let validationError = draft.validationError {
+                    HermesValidationMessage(text: validationError)
                 }
             }
         }
@@ -718,23 +775,44 @@ private struct CronJobEditorView: View {
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 CronFormField(label: "Title") {
-                    TextField("Morning Briefing", text: $draft.name)
+                    TextField(L10n.string("Morning Briefing"), text: $draft.name)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                CronFormField(label: "Prompt") {
-                    TextEditor(text: $draft.prompt)
-                        .font(.body)
-                        .frame(minHeight: 170)
-                        .padding(10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(Color(NSColor.textBackgroundColor))
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                        }
+                Toggle(L10n.string("Script-only job"), isOn: $draft.noAgent)
+                    .toggleStyle(.checkbox)
+
+                if draft.noAgent {
+                    CronFormField(label: "Script Path") {
+                        TextField(L10n.string("memory-watchdog.sh"), text: $draft.script)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    }
+
+                    CronFormField(label: "Working Directory") {
+                        TextField(L10n.string("Optional absolute path"), text: $draft.workdir)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    }
+
+                    Text(L10n.string("Script-only jobs run a script from the host's Hermes scripts directory and deliver stdout directly without creating an agent turn."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    CronFormField(label: "Prompt") {
+                        TextEditor(text: $draft.prompt)
+                            .font(.body)
+                            .frame(minHeight: 170)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(NSColor.textBackgroundColor))
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(HermesTheme.subtleStroke, lineWidth: 1)
+                            }
+                    }
                 }
             }
         }
@@ -747,7 +825,7 @@ private struct CronJobEditorView: View {
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 CronFormField(label: "Frequency") {
-                    Picker("Frequency", selection: schedulePresetBinding) {
+                    Picker(L10n.string("Frequency"), selection: schedulePresetBinding) {
                         ForEach(CronSchedulePreset.allCases) { preset in
                             Text(L10n.string(preset.title)).tag(preset)
                         }
@@ -773,7 +851,7 @@ private struct CronJobEditorView: View {
 
                 if draft.schedule.preset == .weekly {
                     CronFormField(label: "Day") {
-                        Picker("Day", selection: scheduleWeekdayBinding) {
+                        Picker(L10n.string("Day"), selection: scheduleWeekdayBinding) {
                             ForEach(Array(CronScheduleFormatter.weekdayPickerLabels.enumerated()), id: \.offset) { index, label in
                                 Text(L10n.string(label)).tag(index)
                             }
@@ -793,7 +871,7 @@ private struct CronJobEditorView: View {
 
                 if showsTimezoneField {
                     CronFormField(label: "Timezone") {
-                        TextField("Europe/Rome, UTC, America/New_York", text: $draft.timezone)
+                        TextField(L10n.string("Europe/Rome, UTC, America/New_York"), text: $draft.timezone)
                             .textFieldStyle(.roundedBorder)
                     }
                 }
@@ -824,13 +902,8 @@ private struct CronJobEditorView: View {
             subtitle: "Delivery is required. Skills and model overrides remain optional."
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                CronFormField(label: "Skills") {
-                    TextField("daily-robi, morning-briefing", text: $draft.skillsText)
-                        .textFieldStyle(.roundedBorder)
-                }
-
                 CronFormField(label: "Delivery") {
-                    Picker("Delivery", selection: deliveryPresetBinding) {
+                    Picker(L10n.string("Delivery"), selection: deliveryPresetBinding) {
                         ForEach(CronDeliveryPreset.allCases) { preset in
                             Text(L10n.string(preset.title)).tag(preset)
                         }
@@ -841,7 +914,7 @@ private struct CronJobEditorView: View {
 
                 if draft.deliveryPreset == .custom {
                     CronFormField(label: "Custom Target") {
-                        TextField("telegram:-1001234567890:17585", text: customDeliveryBinding)
+                        TextField(L10n.string("telegram:-1001234567890:17585"), text: customDeliveryBinding)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(.body, design: .monospaced))
                     }
@@ -855,19 +928,26 @@ private struct CronJobEditorView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                CronFormField(label: "Model") {
-                    TextField("gpt-5.4-mini", text: $draft.model)
-                        .textFieldStyle(.roundedBorder)
-                }
+                if !draft.noAgent {
+                    CronFormField(label: "Skills") {
+                        TextField(L10n.string("daily-robi, morning-briefing"), text: $draft.skillsText)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
-                CronFormField(label: "Provider") {
-                    TextField("openai", text: $draft.provider)
-                        .textFieldStyle(.roundedBorder)
-                }
+                    CronFormField(label: "Model") {
+                        TextField(L10n.string("gpt-5.4-mini"), text: $draft.model)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
-                CronFormField(label: "Base URL") {
-                    TextField("https://api.openai.com/v1", text: $draft.baseURL)
-                        .textFieldStyle(.roundedBorder)
+                    CronFormField(label: "Provider") {
+                        TextField(L10n.string("openai"), text: $draft.provider)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    CronFormField(label: "Base URL") {
+                        TextField(L10n.string("https://api.openai.com/v1"), text: $draft.baseURL)
+                            .textFieldStyle(.roundedBorder)
+                    }
                 }
             }
         }
@@ -882,7 +962,7 @@ private struct CronJobEditorView: View {
             }
 
             CronFormField(label: "Unit") {
-                Picker("Unit", selection: scheduleIntervalUnitBinding) {
+                Picker(L10n.string("Unit"), selection: scheduleIntervalUnitBinding) {
                     ForEach(CronIntervalUnit.allCases) { unit in
                         Text(L10n.string(unit.title)).tag(unit)
                     }
@@ -896,7 +976,7 @@ private struct CronJobEditorView: View {
     private var dateTimeRow: some View {
         CronFormField(label: "Run At") {
             DatePicker(
-                "Run At",
+                L10n.string("Run At"),
                 selection: scheduleOneTimeDateBinding,
                 displayedComponents: [.date, .hourAndMinute]
             )
@@ -913,7 +993,7 @@ private struct CronJobEditorView: View {
             }
 
             CronFormField(label: "Unit") {
-                Picker("Unit", selection: scheduleIntervalUnitBinding) {
+                Picker(L10n.string("Unit"), selection: scheduleIntervalUnitBinding) {
                     ForEach(CronIntervalUnit.allCases) { unit in
                         Text(L10n.string(unit.title)).tag(unit)
                     }
@@ -926,7 +1006,7 @@ private struct CronJobEditorView: View {
 
     private var hourlyRow: some View {
         CronFormField(label: "Minute") {
-            Picker("Minute", selection: scheduleMinuteBinding) {
+            Picker(L10n.string("Minute"), selection: scheduleMinuteBinding) {
                 ForEach(0..<60, id: \.self) { minute in
                     Text(String(format: "%02d", minute)).tag(minute)
                 }
@@ -939,7 +1019,7 @@ private struct CronJobEditorView: View {
     private var timeRow: some View {
         HStack(alignment: .top, spacing: 12) {
             CronFormField(label: "Hour") {
-                Picker("Hour", selection: scheduleHourBinding) {
+                Picker(L10n.string("Hour"), selection: scheduleHourBinding) {
                     ForEach(0..<24, id: \.self) { hour in
                         Text(String(format: "%02d", hour)).tag(hour)
                     }
@@ -949,7 +1029,7 @@ private struct CronJobEditorView: View {
             }
 
             CronFormField(label: "Minute") {
-                Picker("Minute", selection: scheduleMinuteBinding) {
+                Picker(L10n.string("Minute"), selection: scheduleMinuteBinding) {
                     ForEach(0..<60, id: \.self) { minute in
                         Text(String(format: "%02d", minute)).tag(minute)
                     }
@@ -962,7 +1042,7 @@ private struct CronJobEditorView: View {
 
     private var customExpressionRow: some View {
         CronFormField(label: "Schedule") {
-            TextField("0 8 * * * or daily at 9am", text: customExpressionBinding)
+            TextField(L10n.string("0 8 * * * or daily at 9am"), text: customExpressionBinding)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(.body, design: .monospaced))
         }

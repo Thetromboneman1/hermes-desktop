@@ -51,6 +51,7 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
     let name: String?
     let description: String?
     let version: String?
+    let platforms: [String]
     let tags: [String]
     let relatedSkills: [String]
     let hasReferences: Bool
@@ -67,6 +68,7 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
         case name
         case description
         case version
+        case platforms
         case tags
         case relatedSkills = "related_skills"
         case hasReferences = "has_references"
@@ -83,7 +85,7 @@ struct SkillSummary: Codable, Identifiable, Hashable, SkillCatalogItem {
             resolvedName,
             resolvedCategory,
             sourceLabel
-        ]
+        ] + platforms + tags + relatedSkills
 
         return haystacks.contains { value in
             value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -102,6 +104,7 @@ struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
     let name: String?
     let description: String?
     let version: String?
+    let platforms: [String]
     let tags: [String]
     let relatedSkills: [String]
     let hasReferences: Bool
@@ -120,6 +123,7 @@ struct SkillDetail: Codable, Identifiable, Hashable, SkillCatalogItem {
         case name
         case description
         case version
+        case platforms
         case tags
         case relatedSkills = "related_skills"
         case hasReferences = "has_references"
