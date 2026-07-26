@@ -1,0 +1,26 @@
+schema_version: 1
+last_audited: "2026-07-26"
+repository: Thetromboneman1/hermes-desktop
+upstream:
+  repository: dodo-reach/hermes-desktop
+  branch: main
+  strategy: merge into tested review branch
+downstream:
+  branch: main
+  validation_script: scripts/validate-downstream.sh
+intentional_differences:
+  - .github/downstream-config-manifest.yml
+  - .github/workflows/deploy-pages.yml
+  - .github/workflows/upstream-sync.yml
+  - AI-Integration.md
+  - Operations.md
+  - docs/repository-maintenance.md
+  - scripts/validate-downstream.sh
+preserved_contract:
+  platform: macOS 14 or later
+  package_manager: Swift Package Manager
+  transport: direct SSH
+  canonical_state: remote Hermes host
+  local_mirror: false
+secret_references:
+  - GITHUB_TOKEN

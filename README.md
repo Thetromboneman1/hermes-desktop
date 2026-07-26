@@ -2,6 +2,11 @@
 
 Native macOS companion for Hermes Agent over SSH.
 
+Repository role: active downstream fork of `dodo-reach/hermes-desktop`. See
+[repository maintenance](docs/repository-maintenance.md) for upstream sync,
+validation, downstream preservation, notification status, and recovery.
+Last audited: 2026-07-26.
+
 It turns the daily Hermes loop into something you can actually live in on a
 Mac.
 

@@ -1,0 +1,159 @@
+name: Sync Fork From Upstream
+
+on:
+  schedule:
+    - cron: "17 8 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPSTREAM_REPOSITORY: dodo-reach/hermes-desktop
+      DOWNSTREAM_BRANCH: main
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Resolve upstream main
+        id: upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add authoritative-upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            if git fetch --no-tags authoritative-upstream main; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
+          upstream_sha=$(git rev-parse FETCH_HEAD)
+          {
+            echo "sha=$upstream_sha"
+            echo "short=${upstream_sha:0:12}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Merge into review branch
+        id: merge
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+          SHORT_SHA: ${{ steps.upstream.outputs.short }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
+            {
+              echo "changed=false"
+              echo "conflict=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          branch="automation/upstream-sync-${SHORT_SHA}"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
+            git switch --force-create "$branch" FETCH_HEAD
+            {
+              echo "changed=true"
+              echo "conflict=false"
+              echo "branch=$branch"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git switch -c "$branch"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          set +e
+          git merge --no-edit "$UPSTREAM_SHA"
+          merge_status=$?
+          set -e
+          if [[ "$merge_status" -ne 0 ]]; then
+            conflicts=$(git diff --name-only --diff-filter=U | head -50)
+            {
+              echo "changed=false"
+              echo "conflict=true"
+              echo "conflicts<<EOF"
+              echo "$conflicts"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            git merge --abort
+            exit 0
+          fi
+          {
+            echo "changed=true"
+            echo "conflict=false"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate merged downstream
+        if: steps.merge.outputs.changed == 'true'
+        run: scripts/validate-downstream.sh
+
+      - name: Push review branch
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ steps.merge.outputs.branch }}
+        run: git push --set-upstream origin "$BRANCH"
+
+      - name: Open or reuse pull request
+        if: steps.merge.outputs.changed == 'true'
+        env:
+          BRANCH: ${{ steps.merge.outputs.branch }}
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          existing=$(gh pr list --head "$BRANCH" --base "$DOWNSTREAM_BRANCH" --state open --json url --jq '.[0].url // empty')
+          if [[ -n "$existing" ]]; then
+            echo "Existing synchronization PR: $existing" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh pr create \
+            --head "$BRANCH" \
+            --base "$DOWNSTREAM_BRANCH" \
+            --title "chore: sync dodo-reach/hermes-desktop main" \
+            --body "Merges \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`, preserves the downstream manifest, and runs the Swift test suite."
+
+      - name: Record merge conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="Hermes Desktop upstream sync conflict"
+          body_file="$RUNNER_TEMP/hermes-desktop-upstream-conflict.md"
+          {
+            echo "The review merge stopped without changing \`${DOWNSTREAM_BRANCH}\`."
+            echo
+            echo "- Upstream: \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo '```text'
+            echo "$CONFLICTS"
+            echo '```'
+          } > "$body_file"
+          issue_number=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [[ -n "$issue_number" ]]; then
+            gh issue comment "$issue_number" --body-file "$body_file"
+          else
+            gh issue create --title "$title" --body-file "$body_file"
+          fi
+          cat "$body_file" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
