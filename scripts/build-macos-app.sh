@@ -108,6 +108,12 @@ stamp_plist_versions() {
 }
 
 generate_icon() {
+    if [[ -f "$ICNS_PATH" ]]; then
+        iconutil -c iconset "$ICNS_PATH" -o /tmp/hermes-desktop-icon-validation.iconset >/dev/null
+        rm -rf /tmp/hermes-desktop-icon-validation.iconset
+        return
+    fi
+
     mkdir -p "$ICONSET_PATH"
 
     if [[ ! -f "$ICON_SOURCE" ]]; then
@@ -229,6 +235,7 @@ else
 fi
 
 cp "$UNIVERSAL_EXECUTABLE_PATH" "$MACOS_PATH/$APP_NAME"
+xcrun strip -S -x "$MACOS_PATH/$APP_NAME"
 cp "$PLIST_PATH" "$CONTENTS_PATH/Info.plist"
 stamp_plist_versions "$CONTENTS_PATH/Info.plist"
 cp "$ICNS_PATH" "$RESOURCES_PATH/AppIcon.icns"

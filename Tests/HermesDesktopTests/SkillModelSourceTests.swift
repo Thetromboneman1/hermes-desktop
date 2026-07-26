@@ -19,6 +19,7 @@ struct SkillModelSourceTests {
             name: "Deploy Kubernetes",
             description: "Ship a manifest safely.",
             version: "1.0.0",
+            platforms: ["macos", "linux"],
             tags: ["k8s"],
             relatedSkills: [],
             hasReferences: true,
@@ -31,6 +32,7 @@ struct SkillModelSourceTests {
         #expect(summary.source.kind == .local)
         #expect(summary.source.isReadOnly == false)
         #expect(summary.skillFilePath == "~/.hermes/skills/devops/deploy-k8s/SKILL.md")
+        #expect(summary.matchesSearch("linux"))
     }
 
     @Test
@@ -50,6 +52,7 @@ struct SkillModelSourceTests {
             name: "Team Conventions",
             description: "Shared standards.",
             version: nil,
+            platforms: [],
             tags: [],
             relatedSkills: [],
             hasReferences: false,

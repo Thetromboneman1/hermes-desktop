@@ -39,6 +39,7 @@ protocol SkillCatalogItem: Identifiable where ID == String {
     var name: String? { get }
     var description: String? { get }
     var version: String? { get }
+    var platforms: [String] { get }
     var tags: [String] { get }
     var relatedSkills: [String] { get }
     var hasReferences: Bool { get }

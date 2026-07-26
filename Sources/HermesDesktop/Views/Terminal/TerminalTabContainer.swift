@@ -3,8 +3,11 @@ import SwiftUI
 struct TerminalTabContainer: View {
     @ObservedObject var session: TerminalSession
     let appearance: TerminalThemeAppearance
+    let fontSize: Double
+    let fontFamily: TerminalFontFamilyPreference
     let isActive: Bool
     let activeWorkspaceScopeFingerprint: String?
+    let backgroundImageActive: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +22,7 @@ struct TerminalTabContainer: View {
                         }
                     }
 
-                    Text(session.connection.displayDestination)
+                    Text(session.connection.localizedDisplayDestination)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -38,7 +41,7 @@ struct TerminalTabContainer: View {
                         .font(.caption)
                         .foregroundStyle(exitCode == 0 ? Color.secondary : Color.orange)
 
-                    Button("Reconnect") {
+                    Button(L10n.string("Reconnect")) {
                         session.requestReconnect()
                     }
                     .buttonStyle(.bordered)
@@ -46,11 +49,18 @@ struct TerminalTabContainer: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color.secondary.opacity(0.08))
+            .background(backgroundImageActive ? AnyShapeStyle(.thinMaterial) : AnyShapeStyle(Color.secondary.opacity(0.08)))
 
-            SwiftTermTerminalView(session: session, appearance: appearance, isActive: isActive)
+            SwiftTermTerminalView(
+                session: session,
+                appearance: appearance,
+                fontSize: fontSize,
+                fontFamily: fontFamily,
+                isActive: isActive,
+                backgroundImageActive: backgroundImageActive
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(appearance.backgroundColor.swiftUIColor)
+                .background(backgroundImageActive ? Color.clear : appearance.backgroundColor.swiftUIColor)
                 .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

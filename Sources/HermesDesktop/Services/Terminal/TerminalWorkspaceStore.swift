@@ -6,9 +6,14 @@ final class TerminalWorkspaceStore: ObservableObject {
     @Published var selectedTabID: UUID?
 
     private let sshTransport: SSHTransport
+    private let workflowLaunchDiagnostics: WorkflowLaunchDiagnostics
 
-    init(sshTransport: SSHTransport) {
+    init(
+        sshTransport: SSHTransport,
+        workflowLaunchDiagnostics: WorkflowLaunchDiagnostics
+    ) {
         self.sshTransport = sshTransport
+        self.workflowLaunchDiagnostics = workflowLaunchDiagnostics
     }
 
     var selectedTab: TerminalTabModel? {
@@ -33,8 +38,35 @@ final class TerminalWorkspaceStore: ObservableObject {
     }
 
     @discardableResult
-    func addTab(for connection: ConnectionProfile) -> TerminalTabModel {
-        let session = TerminalSession(connection: connection, sshTransport: sshTransport)
+    func addCommandTab(
+        for connection: ConnectionProfile,
+        commandLine: String,
+        initialInput: String? = nil,
+        workflowLaunchDiagnosticsContext: WorkflowLaunchDiagnosticsContext? = nil
+    ) -> TerminalTabModel {
+        addTab(
+            for: connection,
+            startupCommandLine: commandLine,
+            startupInput: initialInput,
+            workflowLaunchDiagnosticsContext: workflowLaunchDiagnosticsContext
+        )
+    }
+
+    @discardableResult
+    func addTab(
+        for connection: ConnectionProfile,
+        startupCommandLine: String? = nil,
+        startupInput: String? = nil,
+        workflowLaunchDiagnosticsContext: WorkflowLaunchDiagnosticsContext? = nil
+    ) -> TerminalTabModel {
+        let session = TerminalSession(
+            connection: connection,
+            sshTransport: sshTransport,
+            startupCommandLine: startupCommandLine,
+            startupInput: startupInput,
+            workflowLaunchDiagnostics: workflowLaunchDiagnostics,
+            workflowLaunchDiagnosticsContext: workflowLaunchDiagnosticsContext
+        )
         let tab = TerminalTabModel(
             title: connection.label,
             connectionID: connection.id,

@@ -29,7 +29,7 @@ struct SkillDetailView: View {
                         }
                     }
 
-                    if !detail.tags.isEmpty || !detail.relatedSkills.isEmpty || !detail.featureBadges.isEmpty {
+                    if !detail.platforms.isEmpty || !detail.tags.isEmpty || !detail.relatedSkills.isEmpty || !detail.featureBadges.isEmpty {
                         metadataPanel(detail)
                     }
 
@@ -81,16 +81,16 @@ struct SkillDetailView: View {
                     HermesSurfacePanel {
                         VStack(alignment: .leading, spacing: 18) {
                             ContentUnavailableView(
-                                "Select a skill",
+                                L10n.string("Select a skill"),
                                 systemImage: "book.closed",
-                                description: Text("Choose a Hermes skill from the active host to inspect its metadata and full SKILL.md.")
+                                description: Text(L10n.string("Choose a Hermes skill from the active host to inspect its metadata and full SKILL.md."))
                             )
                             .frame(maxWidth: .infinity, minHeight: 240)
 
                             Button {
                                 onCreate()
                             } label: {
-                                Label("Create New Skill", systemImage: "plus")
+                                Label(L10n.string("Create New Skill"), systemImage: "plus")
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -131,7 +131,7 @@ struct SkillDetailView: View {
                             HermesBadge(text: category, tint: .secondary)
                         }
 
-                        Button("Edit SKILL.md") {
+                        Button(L10n.string("Edit SKILL.md")) {
                             onEdit()
                         }
                         .buttonStyle(.bordered)
@@ -175,7 +175,7 @@ struct SkillDetailView: View {
 
                 HermesInsetSurface {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Remote path")
+                        Text(L10n.string("Remote path"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -186,7 +186,7 @@ struct SkillDetailView: View {
                 }
 
                 if detail.isReadOnly {
-                    Text("External skill directories are discovery-only in Hermes. This skill is available to inspect here, but edits still belong in the local Hermes skills store.")
+                    Text(L10n.string("External skill directories are discovery-only in Hermes. This skill is available to inspect here, but edits still belong in the local Hermes skills store."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -200,6 +200,16 @@ struct SkillDetailView: View {
             subtitle: "Optional frontmatter fields and companion directories discovered for this skill."
         ) {
             VStack(alignment: .leading, spacing: 18) {
+                if !detail.platforms.isEmpty {
+                    SkillMetadataSection(title: "Platforms") {
+                        SkillMetadataBadgeGroup(
+                            values: detail.platforms,
+                            tint: .mint,
+                            monospaced: true
+                        )
+                    }
+                }
+
                 if !detail.tags.isEmpty {
                     SkillMetadataSection(title: "Tags") {
                         SkillMetadataBadgeGroup(values: detail.tags, tint: .accentColor)
@@ -218,7 +228,7 @@ struct SkillDetailView: View {
 
                 if !detail.featureBadges.isEmpty {
                     SkillMetadataSection(title: "Companion directories") {
-                        WrappingFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+                        HermesWrappingFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
                             ForEach(detail.featureBadges) { badge in
                                 SkillMetadataBadge(text: badge.title, tint: badge.color)
                             }
@@ -295,7 +305,7 @@ struct SkillEditorView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(isSaving || saveDisabled)
 
-                    Button("Cancel", action: onCancel)
+                    Button(L10n.string("Cancel"), action: onCancel)
                         .buttonStyle(.bordered)
                         .disabled(isSaving)
 
@@ -315,12 +325,12 @@ struct SkillEditorView: View {
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 SkillFormField(label: "Skill Name") {
-                    TextField("Remote debugging, Deploy to VPS, Research notes", text: $draft.name)
+                    TextField(L10n.string("Remote debugging, Deploy to VPS, Research notes"), text: $draft.name)
                         .textFieldStyle(.roundedBorder)
                 }
 
                 SkillFormField(label: "Short Description") {
-                    TextField("When Hermes should use this skill and what it helps it do.", text: $draft.description, axis: .vertical)
+                    TextField(L10n.string("When Hermes should use this skill and what it helps it do."), text: $draft.description, axis: .vertical)
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(2...3)
                 }
@@ -328,12 +338,12 @@ struct SkillEditorView: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 14) {
                         SkillFormField(label: "Category Path") {
-                            TextField("Optional: agent-workflows, ssh/tools", text: $draft.categoryPath)
+                            TextField(L10n.string("Optional: agent-workflows, ssh/tools"), text: $draft.categoryPath)
                                 .textFieldStyle(.roundedBorder)
                         }
 
                         SkillFormField(label: "Folder Name") {
-                            TextField("deploy-to-vps", text: $draft.slug)
+                            TextField(L10n.string("deploy-to-vps"), text: $draft.slug)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.body, design: .monospaced))
                         }
@@ -341,12 +351,12 @@ struct SkillEditorView: View {
 
                     VStack(alignment: .leading, spacing: 14) {
                         SkillFormField(label: "Category Path") {
-                            TextField("Optional: agent-workflows, ssh/tools", text: $draft.categoryPath)
+                            TextField(L10n.string("Optional: agent-workflows, ssh/tools"), text: $draft.categoryPath)
                                 .textFieldStyle(.roundedBorder)
                         }
 
                         SkillFormField(label: "Folder Name") {
-                            TextField("deploy-to-vps", text: $draft.slug)
+                            TextField(L10n.string("deploy-to-vps"), text: $draft.slug)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.body, design: .monospaced))
                         }
@@ -354,14 +364,14 @@ struct SkillEditorView: View {
                 }
 
                 SkillFormField(label: "Version") {
-                    TextField("Optional: 1.0.0", text: $draft.version)
+                    TextField(L10n.string("Optional: 1.0.0"), text: $draft.version)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
                 }
 
                 HermesInsetSurface {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Remote path")
+                        Text(L10n.string("Remote path"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -381,24 +391,24 @@ struct SkillEditorView: View {
         ) {
             VStack(alignment: .leading, spacing: 14) {
                 SkillFormField(label: "Tags") {
-                    TextField("Comma-separated: ssh, deploy, troubleshooting", text: $draft.tagsText)
+                    TextField(L10n.string("Comma-separated: ssh, deploy, troubleshooting"), text: $draft.tagsText)
                         .textFieldStyle(.roundedBorder)
                 }
 
                 SkillFormField(label: "Related Skills") {
-                    TextField("Comma-separated slugs: playwright, security-best-practices", text: $draft.relatedSkillsText)
+                    TextField(L10n.string("Comma-separated slugs: playwright, security-best-practices"), text: $draft.relatedSkillsText)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Companion Folders")
+                    Text(L10n.string("Companion Folders"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    Toggle("Create references/ for longer docs or domain notes", isOn: $draft.includeReferencesFolder)
-                    Toggle("Create scripts/ for deterministic helpers", isOn: $draft.includeScriptsFolder)
-                    Toggle("Create templates/ for reusable output files", isOn: $draft.includeTemplatesFolder)
+                    Toggle(L10n.string("Create references/ for longer docs or domain notes"), isOn: $draft.includeReferencesFolder)
+                    Toggle(L10n.string("Create scripts/ for deterministic helpers"), isOn: $draft.includeScriptsFolder)
+                    Toggle(L10n.string("Create templates/ for reusable output files"), isOn: $draft.includeTemplatesFolder)
                 }
             }
         }
@@ -421,7 +431,9 @@ struct SkillEditorView: View {
     private var generatedPreviewPanel: some View {
         HermesSurfacePanel(
             title: "Generated Preview",
-            subtitle: "This is the SKILL.md the app will write on the remote Hermes host."
+            subtitle: appState.activeConnection?.kind == .local
+                ? "This is the SKILL.md the app will write to this Mac’s real Hermes data."
+                : "This is the SKILL.md the app will write on the remote Hermes host."
         ) {
             HermesInsetSurface {
                 Text(draft.generatedMarkdown)
@@ -440,7 +452,7 @@ struct SkillEditorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 HermesInsetSurface {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Remote path")
+                        Text(L10n.string(appState.activeConnection?.kind == .local ? "Path on this Mac" : "Remote path"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -451,13 +463,13 @@ struct SkillEditorView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Companion Folders")
+                    Text(L10n.string("Companion Folders"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 
-                    Toggle("Ensure references/ exists", isOn: $draft.includeReferencesFolder)
-                    Toggle("Ensure scripts/ exists", isOn: $draft.includeScriptsFolder)
-                    Toggle("Ensure templates/ exists", isOn: $draft.includeTemplatesFolder)
+                    Toggle(L10n.string("Ensure references/ exists"), isOn: $draft.includeReferencesFolder)
+                    Toggle(L10n.string("Ensure scripts/ exists"), isOn: $draft.includeScriptsFolder)
+                    Toggle(L10n.string("Ensure templates/ exists"), isOn: $draft.includeTemplatesFolder)
                 }
             }
         }
@@ -466,7 +478,7 @@ struct SkillEditorView: View {
     private var rawMarkdownPanel: some View {
         HermesSurfacePanel(
             title: "SKILL.md",
-            subtitle: "Edit the existing skill source directly. Saves are atomic and checked against the last loaded remote version."
+            subtitle: "Edit the existing skill source directly. Saves are atomic and checked against the last loaded version."
         ) {
             TextEditor(text: $rawMarkdownContent)
                 .font(.system(.body, design: .monospaced))
@@ -482,7 +494,7 @@ struct SkillEditorView: View {
         case .create:
             return "Create a new Hermes skill from a guided form instead of writing YAML frontmatter and folder structure by hand."
         case .edit:
-            return "Update the existing SKILL.md directly while keeping the remote path fixed and protected by a conflict check."
+            return "Update the existing SKILL.md directly while keeping its path fixed and protected by a conflict check."
         }
     }
 
@@ -553,7 +565,7 @@ private struct SkillMetadataBadgeGroup: View {
     var monospaced = false
 
     var body: some View {
-        WrappingFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
+        HermesWrappingFlowLayout(horizontalSpacing: 8, verticalSpacing: 8) {
             ForEach(values, id: \.self) { value in
                 SkillMetadataBadge(
                     text: value,
@@ -586,105 +598,4 @@ private struct SkillMetadataBadge: View {
             }
             .help(text)
         }
-}
-
-private struct WrappingFlowLayout: Layout {
-    let horizontalSpacing: CGFloat
-    let verticalSpacing: CGFloat
-
-    init(horizontalSpacing: CGFloat = 8, verticalSpacing: CGFloat = 8) {
-        self.horizontalSpacing = horizontalSpacing
-        self.verticalSpacing = verticalSpacing
-    }
-
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout Void
-    ) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let lines = computeLines(for: sizes, maxWidth: proposal.width)
-        let height = lines.reduce(CGFloat.zero) { partial, line in
-            partial + line.height
-        } + verticalSpacing * CGFloat(max(0, lines.count - 1))
-        let width = proposal.width ?? lines.map(\.width).max() ?? 0
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout Void
-    ) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let lines = computeLines(for: sizes, maxWidth: bounds.width)
-        var currentY = bounds.minY
-
-        for line in lines {
-            var currentX = bounds.minX
-            for item in line.items {
-                let size = sizes[item.index]
-                subviews[item.index].place(
-                    at: CGPoint(x: currentX, y: currentY),
-                    proposal: ProposedViewSize(width: size.width, height: size.height)
-                )
-                currentX += size.width + horizontalSpacing
-            }
-            currentY += line.height + verticalSpacing
-        }
-    }
-
-    private func computeLines(for sizes: [CGSize], maxWidth: CGFloat?) -> [FlowLine] {
-        let availableWidth = maxWidth ?? .greatestFiniteMagnitude
-        guard !sizes.isEmpty else { return [] }
-
-        var lines: [FlowLine] = []
-        var currentItems: [FlowLineItem] = []
-        var currentWidth: CGFloat = 0
-        var currentHeight: CGFloat = 0
-
-        for (index, size) in sizes.enumerated() {
-            let proposedWidth = currentItems.isEmpty ? size.width : currentWidth + horizontalSpacing + size.width
-
-            if !currentItems.isEmpty && proposedWidth > availableWidth {
-                lines.append(
-                    FlowLine(
-                        items: currentItems,
-                        width: currentWidth,
-                        height: currentHeight
-                    )
-                )
-                currentItems = [FlowLineItem(index: index)]
-                currentWidth = size.width
-                currentHeight = size.height
-            } else {
-                currentItems.append(FlowLineItem(index: index))
-                currentWidth = proposedWidth
-                currentHeight = max(currentHeight, size.height)
-            }
-        }
-
-        if !currentItems.isEmpty {
-            lines.append(
-                FlowLine(
-                    items: currentItems,
-                    width: currentWidth,
-                    height: currentHeight
-                )
-            )
-        }
-
-        return lines
-    }
-}
-
-private struct FlowLine {
-    let items: [FlowLineItem]
-    let width: CGFloat
-    let height: CGFloat
-}
-
-private struct FlowLineItem {
-    let index: Int
 }

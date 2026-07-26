@@ -26,6 +26,9 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
     let deliveryTarget: String?
     let origin: CronJobOrigin?
     let lastDeliveryError: String?
+    let script: String?
+    let workdir: String?
+    let noAgent: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -48,6 +51,86 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
         case deliveryTarget = "delivery_target"
         case origin
         case lastDeliveryError = "last_delivery_error"
+        case script
+        case workdir
+        case noAgent = "no_agent"
+    }
+
+    init(
+        id: String,
+        name: String,
+        prompt: String,
+        skills: [String],
+        model: String?,
+        provider: String?,
+        baseURL: String?,
+        schedule: CronSchedule?,
+        scheduleDisplay: String,
+        recurrence: CronRecurrence?,
+        enabled: Bool,
+        state: CronJobState,
+        createdAt: Date?,
+        nextRunAt: Date?,
+        lastRunAt: Date?,
+        lastStatus: String?,
+        lastError: String?,
+        deliveryTarget: String?,
+        origin: CronJobOrigin?,
+        lastDeliveryError: String?,
+        script: String? = nil,
+        workdir: String? = nil,
+        noAgent: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.prompt = prompt
+        self.skills = skills
+        self.model = model
+        self.provider = provider
+        self.baseURL = baseURL
+        self.schedule = schedule
+        self.scheduleDisplay = scheduleDisplay
+        self.recurrence = recurrence
+        self.enabled = enabled
+        self.state = state
+        self.createdAt = createdAt
+        self.nextRunAt = nextRunAt
+        self.lastRunAt = lastRunAt
+        self.lastStatus = lastStatus
+        self.lastError = lastError
+        self.deliveryTarget = deliveryTarget
+        self.origin = origin
+        self.lastDeliveryError = lastDeliveryError
+        self.script = script
+        self.workdir = workdir
+        self.noAgent = noAgent
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        prompt = try container.decodeIfPresent(String.self, forKey: .prompt) ?? ""
+        skills = try container.decodeIfPresent([String].self, forKey: .skills) ?? []
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider)
+        baseURL = try container.decodeIfPresent(String.self, forKey: .baseURL)
+        schedule = try container.decodeIfPresent(CronSchedule.self, forKey: .schedule)
+        scheduleDisplay = try container.decodeIfPresent(String.self, forKey: .scheduleDisplay) ?? ""
+        recurrence = try container.decodeIfPresent(CronRecurrence.self, forKey: .recurrence)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        state = try container.decodeIfPresent(CronJobState.self, forKey: .state) ?? .scheduled
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        nextRunAt = try container.decodeIfPresent(Date.self, forKey: .nextRunAt)
+        lastRunAt = try container.decodeIfPresent(Date.self, forKey: .lastRunAt)
+        lastStatus = try container.decodeIfPresent(String.self, forKey: .lastStatus)
+        lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
+        deliveryTarget = try container.decodeIfPresent(String.self, forKey: .deliveryTarget)
+        origin = try container.decodeIfPresent(CronJobOrigin.self, forKey: .origin)
+        lastDeliveryError = try container.decodeIfPresent(String.self, forKey: .lastDeliveryError)
+        script = try container.decodeIfPresent(String.self, forKey: .script)
+        workdir = try container.decodeIfPresent(String.self, forKey: .workdir)
+        noAgent = try container.decodeIfPresent(Bool.self, forKey: .noAgent) ?? false
     }
 
     var resolvedName: String {
@@ -61,8 +144,13 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
     }
 
     var previewPrompt: String {
+        if noAgent {
+            let scriptLabel = trimmedScript ?? L10n.string("No script configured")
+            return L10n.string("Script-only watchdog: %@", scriptLabel)
+        }
+
         guard let trimmedPrompt else {
-            return "No saved prompt payload"
+            return L10n.string("No prompt payload saved for this job.")
         }
 
         let compact = trimmedPrompt.replacingOccurrences(of: "\n", with: " ")
@@ -89,6 +177,20 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
         state.isActive
     }
 
+    var trimmedScript: String? {
+        let trimmed = script?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var trimmedWorkdir: String? {
+        let trimmed = workdir?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var executionModeTitle: String {
+        noAgent ? "Script Only" : "Agent"
+    }
+
     var displayState: String {
         state.displayTitle(isEnabled: enabled)
     }
@@ -97,8 +199,9 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else { return true }
 
-        let normalizedQuery = trimmedQuery.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        let haystacks = [
+        let foldingOptions: String.CompareOptions = [.diacriticInsensitive, .caseInsensitive]
+        let normalizedQuery = trimmedQuery.folding(options: foldingOptions, locale: Locale.current)
+        var haystacks: [String] = [
             id,
             resolvedName,
             prompt,
@@ -108,10 +211,16 @@ struct CronJob: Codable, Identifiable, Hashable, OptionalModelDisplayable {
             provider ?? "",
             baseURL ?? "",
             deliveryTarget ?? ""
-        ] + skills
+        ]
+        haystacks.append(contentsOf: skills)
+        haystacks.append(contentsOf: [
+            script ?? "",
+            workdir ?? "",
+            executionModeTitle
+        ])
 
         return haystacks.contains { value in
-            value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            value.folding(options: foldingOptions, locale: Locale.current)
                 .localizedStandardContains(normalizedQuery)
         }
     }
@@ -291,11 +400,11 @@ enum CronIntervalUnit: String, CaseIterable, Identifiable {
     func displayLabel(for value: Int) -> String {
         switch self {
         case .minutes:
-            return value == 1 ? "minute" : "minutes"
+            return L10n.string(value == 1 ? "minute" : "minutes")
         case .hours:
-            return value == 1 ? "hour" : "hours"
+            return L10n.string(value == 1 ? "hour" : "hours")
         case .days:
-            return value == 1 ? "day" : "days"
+            return L10n.string(value == 1 ? "day" : "days")
         }
     }
 }
@@ -303,6 +412,7 @@ enum CronIntervalUnit: String, CaseIterable, Identifiable {
 enum CronDeliveryPreset: String, CaseIterable, Identifiable {
     case local
     case origin
+    case all
     case telegram
     case discord
     case slack
@@ -318,6 +428,8 @@ enum CronDeliveryPreset: String, CaseIterable, Identifiable {
             return "Local Only"
         case .origin:
             return "Origin Chat"
+        case .all:
+            return "All Connected Channels"
         case .telegram:
             return "Telegram Home"
         case .discord:
@@ -339,6 +451,8 @@ enum CronDeliveryPreset: String, CaseIterable, Identifiable {
             return "local"
         case .origin:
             return "origin"
+        case .all:
+            return "all"
         case .telegram:
             return "telegram"
         case .discord:
@@ -365,6 +479,8 @@ enum CronDeliveryPreset: String, CaseIterable, Identifiable {
             return (.local, "")
         case "origin":
             return (.origin, "")
+        case "all":
+            return (.all, "")
         case "telegram":
             return (.telegram, "")
         case "discord":
@@ -543,7 +659,7 @@ struct CronScheduleDraft: Hashable {
     }
 
     var summary: String {
-        guard let expression else { return "No schedule" }
+        guard let expression else { return L10n.string("No schedule") }
         return CronScheduleFormatter.humanReadableDescription(for: expression) ?? expression
     }
 }
@@ -551,6 +667,9 @@ struct CronScheduleDraft: Hashable {
 struct CronJobDraft: Hashable {
     var name: String
     var prompt: String
+    var script: String
+    var workdir: String
+    var noAgent: Bool
     var skillsText: String
     var model: String
     var provider: String
@@ -563,6 +682,9 @@ struct CronJobDraft: Hashable {
     init(
         name: String = "",
         prompt: String = "",
+        script: String = "",
+        workdir: String = "",
+        noAgent: Bool = false,
         skillsText: String = "",
         model: String = "",
         provider: String = "",
@@ -574,6 +696,9 @@ struct CronJobDraft: Hashable {
     ) {
         self.name = name
         self.prompt = prompt
+        self.script = script
+        self.workdir = workdir
+        self.noAgent = noAgent
         self.skillsText = skillsText
         self.model = model
         self.provider = provider
@@ -588,6 +713,9 @@ struct CronJobDraft: Hashable {
         let parsedDelivery = CronDeliveryPreset.from(deliveryTarget: job.deliveryTarget)
         self.name = job.resolvedName
         self.prompt = job.trimmedPrompt ?? job.prompt
+        self.script = job.trimmedScript ?? ""
+        self.workdir = job.trimmedWorkdir ?? ""
+        self.noAgent = job.noAgent
         self.skillsText = job.skills.joined(separator: ", ")
         self.model = job.model ?? ""
         self.provider = job.provider ?? ""
@@ -604,6 +732,14 @@ struct CronJobDraft: Hashable {
 
     var normalizedPrompt: String {
         prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var normalizedScript: String? {
+        normalizedOptional(script)
+    }
+
+    var normalizedWorkdir: String? {
+        normalizedOptional(workdir)
     }
 
     var normalizedSkills: [String] {
@@ -648,7 +784,11 @@ struct CronJobDraft: Hashable {
             return "A cron job title is required."
         }
 
-        if normalizedPrompt.isEmpty {
+        if noAgent {
+            if normalizedScript == nil {
+                return "A script path is required for script-only jobs."
+            }
+        } else if normalizedPrompt.isEmpty {
             return "A prompt is required."
         }
 
@@ -706,15 +846,15 @@ enum CronScheduleFormatter {
         let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if let (value, unit) = oneTimeDelayComponents(from: trimmed) {
-            return "Once in \(value) \(unit.displayLabel(for: value))"
+            return L10n.string("Once in %@ %@", "\(value)", unit.displayLabel(for: value))
         }
 
         if let (value, unit) = intervalComponents(from: trimmed) {
-            return "Every \(value) \(unit.displayLabel(for: value))"
+            return L10n.string("Every %@ %@", "\(value)", unit.displayLabel(for: value))
         }
 
         if let date = date(from: trimmed) {
-            return "Once on \(DateFormatters.shortDateTimeFormatter().string(from: date))"
+            return L10n.string("Once on %@", DateFormatters.shortDateTimeFormatter().string(from: date))
         }
 
         let parts = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -728,7 +868,7 @@ enum CronScheduleFormatter {
 
         if hour == "*", month == "*", dayOfMonth == "*", dayOfWeek == "*",
            let minuteValue = Int(minute) {
-            return String(format: "Every hour at :%02d", minuteValue)
+            return L10n.string("Every hour at :%@", String(format: "%02d", minuteValue))
         }
 
         guard let time = formattedTime(hour: hour, minute: minute) else {
@@ -736,21 +876,21 @@ enum CronScheduleFormatter {
         }
 
         if dayOfMonth == "*", month == "*", dayOfWeek == "*" {
-            return "Every day at \(time)"
+            return L10n.string("Every day at %@", time)
         }
 
         if dayOfMonth == "*", month == "*", dayOfWeek == "1-5" {
-            return "Every weekday at \(time)"
+            return L10n.string("Every weekday at %@", time)
         }
 
         if dayOfMonth == "*", month == "*",
            let days = formattedWeekdays(dayOfWeek) {
-            return "Every \(days) at \(time)"
+            return L10n.string("Every %@ at %@", days, time)
         }
 
         if month == "*", dayOfWeek == "*",
            let day = Int(dayOfMonth) {
-            return "On day \(day) of every month at \(time)"
+            return L10n.string("On day %@ of every month at %@", "\(day)", time)
         }
 
         return nil
@@ -775,7 +915,7 @@ enum CronScheduleFormatter {
         let resolved = values.compactMap { weekdaySymbols[$0] }
         guard resolved.count == values.count else { return nil }
 
-        return resolved.joined(separator: ", ")
+        return resolved.map { L10n.string($0) }.joined(separator: ", ")
     }
 
     static func weekdayIndex(for rawValue: String) -> Int? {

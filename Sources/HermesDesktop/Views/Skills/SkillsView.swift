@@ -2,42 +2,40 @@ import SwiftUI
 
 struct SkillsView: View {
     @EnvironmentObject private var appState: AppState
+    @Binding var splitLayout: HermesSplitLayout
     @State private var searchText = ""
     @State private var editorMode: SkillEditorMode?
     @State private var editorDraft = SkillDraft()
     @State private var rawMarkdownContent = ""
 
     var body: some View {
-        HSplitView {
+        HermesCollapsibleHSplitView(layout: $splitLayout, detailMinWidth: HermesSplitMetrics.WorkbenchDetail.minWidth) {
             VStack(alignment: .leading, spacing: 18) {
                 HermesPageHeader(
                     title: "Skills",
                     subtitle: "Browse the Hermes skill library discovered on the active host."
                 ) {
-                    HStack(spacing: 10) {
-                        Button {
-                            startCreating()
-                        } label: {
-                            Label("New", systemImage: "plus")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(appState.isSavingSkillDraft)
-
-                        HermesRefreshButton(isRefreshing: appState.isRefreshingSkills) {
-                            Task { await appState.refreshSkills() }
-                        }
-                    }
-                    .disabled(appState.isLoadingSkills)
+                    HermesExpandableSearchField(
+                        text: $searchText,
+                        prompt: L10n.string("Search skills"),
+                        expandedWidth: 220,
+                        focusRequestID: appState.searchFocusRequestID
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
                 }
 
+                skillsToolbar
                 skillsContent
             }
-            .frame(minWidth: 300, idealWidth: 340, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .padding(.horizontal, 20)
             .padding(.vertical, 20)
-
+        } detail: {
             detailContent
-                .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .hermesSplitDetailColumn(
+                    minWidth: HermesSplitMetrics.WorkbenchDetail.minWidth,
+                    idealWidth: HermesSplitMetrics.WorkbenchDetail.standardIdealWidth
+                )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: appState.activeConnectionID) {
@@ -49,15 +47,7 @@ struct SkillsView: View {
 
     @ViewBuilder
     private var skillsContent: some View {
-        if appState.skills.isEmpty {
-            skillsPanel
-        } else {
-            skillsPanel
-                .overlay(alignment: .topTrailing) {
-                    skillsSearchToolbar
-                        .offset(y: -38)
-                }
-        }
+        skillsPanel
     }
 
     @ViewBuilder
@@ -72,7 +62,7 @@ struct SkillsView: View {
         } else if let error = appState.skillsError, appState.skills.isEmpty {
             HermesSurfacePanel {
                 ContentUnavailableView(
-                    "Unable to load skills",
+                    L10n.string("Unable to load skills"),
                     systemImage: "exclamationmark.triangle",
                     description: Text(error)
                 )
@@ -81,9 +71,9 @@ struct SkillsView: View {
         } else if appState.skills.isEmpty {
             HermesSurfacePanel {
                 ContentUnavailableView(
-                    "No skills found",
+                    L10n.string("No skills found"),
                     systemImage: "book.closed",
-                    description: Text("No readable SKILL.md files were discovered in the Hermes skill roots for this SSH target.")
+                    description: Text(noSkillsDescription)
                 )
                 .frame(maxWidth: .infinity, minHeight: 300)
             }
@@ -94,9 +84,9 @@ struct SkillsView: View {
             ) {
                 if filteredSkills.isEmpty {
                     ContentUnavailableView(
-                        "No matching skills",
+                        L10n.string("No matching skills"),
                         systemImage: "magnifyingglass",
-                        description: Text("Try searching by skill name or category.")
+                        description: Text(L10n.string("Try searching by skill name or category."))
                     )
                     .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
@@ -126,11 +116,22 @@ struct SkillsView: View {
         }
     }
 
-    private var skillsSearchToolbar: some View {
-        HermesExpandableSearchField(
-            text: $searchText,
-            prompt: "Search skills"
-        )
+    private var noSkillsDescription: String {
+        if appState.activeConnection?.kind == .local {
+            return L10n.string("No readable SKILL.md files were discovered in this Mac’s real Hermes skill roots.")
+        }
+        return L10n.string("No readable SKILL.md files were discovered in the Hermes skill roots for this SSH target.")
+    }
+
+    private var skillsToolbar: some View {
+        HStack(spacing: 10) {
+            HermesCreateActionButton("New Skill") {
+                startCreating()
+            }
+            .disabled(appState.isSavingSkillDraft || appState.isLoadingSkills)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var panelTitle: String {
@@ -138,10 +139,10 @@ struct SkillsView: View {
         let filtered = filteredSkills.count
 
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Discovered Skills (\(total))"
+            return L10n.string("Discovered Skills (%@)", "\(total)")
         }
 
-        return "Discovered Skills (\(filtered) of \(total))"
+        return L10n.string("Discovered Skills (%@ of %@)", "\(filtered)", "\(total)")
     }
 
     private var filteredSkills: [SkillSummary] {
@@ -231,7 +232,11 @@ private struct SkillCardRow: View {
     let onSelect: () -> Void
 
     private var cardFillColor: Color {
-        isSelected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08)
+        isSelected ? HermesTheme.selectedFill : HermesTheme.rowFill
+    }
+
+    private var cardStrokeColor: Color {
+        isSelected ? HermesTheme.selectedStroke : HermesTheme.subtleStroke
     }
 
     var body: some View {
@@ -270,7 +275,7 @@ private struct SkillCardRow: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 } else {
-                    Text("No description in frontmatter")
+                    Text(L10n.string("No description in frontmatter"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .italic()
@@ -292,7 +297,7 @@ private struct SkillCardRow: View {
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isSelected ? 0.12 : 0.06), lineWidth: 1)
+                    .strokeBorder(cardStrokeColor, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

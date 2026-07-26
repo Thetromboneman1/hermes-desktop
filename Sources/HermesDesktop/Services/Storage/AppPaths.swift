@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 struct AppPaths {
@@ -6,39 +7,82 @@ struct AppPaths {
     let applicationSupportURL: URL
     let connectionsURL: URL
     let preferencesURL: URL
+    let appearanceAssetsURL: URL
     let controlSocketDirectoryURL: URL
 
-    init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
+    private static let privateDirectoryPermissions = NSNumber(value: Int16(0o700))
 
+    init(fileManager: FileManager = .default) {
         let baseSupport = fileManager.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
         ).first ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let appSupport = baseSupport.appendingPathComponent("HermesDesktop", isDirectory: true)
+        self.init(
+            fileManager: fileManager,
+            applicationSupportURL: baseSupport.appendingPathComponent("HermesDesktop", isDirectory: true),
+            controlSocketDirectoryURL: URL(
+                fileURLWithPath: "/tmp/hd-\(getuid())",
+                isDirectory: true
+            )
+        )
+    }
 
-        let controlDirectory = URL(fileURLWithPath: "/tmp", isDirectory: true)
-            .appendingPathComponent("hermes-desktop-control", isDirectory: true)
+    init(
+        fileManager: FileManager = .default,
+        applicationSupportURL: URL,
+        controlSocketDirectoryURL: URL
+    ) {
+        self.fileManager = fileManager
+        self.applicationSupportURL = applicationSupportURL
+        self.connectionsURL = applicationSupportURL.appendingPathComponent("connections.json")
+        self.preferencesURL = applicationSupportURL.appendingPathComponent("preferences.json")
+        self.appearanceAssetsURL = applicationSupportURL.appendingPathComponent("Appearance", isDirectory: true)
+        self.controlSocketDirectoryURL = controlSocketDirectoryURL
 
-        self.applicationSupportURL = appSupport
-        self.connectionsURL = appSupport.appendingPathComponent("connections.json")
-        self.preferencesURL = appSupport.appendingPathComponent("preferences.json")
-        self.controlSocketDirectoryURL = controlDirectory
+        ensureApplicationSupportDirectory()
+        ensureControlSocketDirectory()
+    }
 
-        createIfNeeded(at: appSupport)
-        createIfNeeded(at: controlDirectory)
+    func ensureApplicationSupportDirectory() {
+        createPrivateDirectoryIfNeeded(at: applicationSupportURL)
+    }
+
+    func ensureControlSocketDirectory() {
+        createPrivateDirectoryIfNeeded(at: controlSocketDirectoryURL)
+    }
+
+    func ensureAppearanceAssetsDirectory() {
+        createPrivateDirectoryIfNeeded(at: appearanceAssetsURL)
+    }
+
+    func appearanceBackgroundImageURL(fileName: String) -> URL {
+        appearanceAssetsURL.appendingPathComponent(fileName, isDirectory: false)
     }
 
     func controlPath(for connection: ConnectionProfile) -> String {
-        controlSocketDirectoryURL
+        ensureControlSocketDirectory()
+
+        return controlSocketDirectoryURL
             .appendingPathComponent(controlSocketIdentifier(for: connection))
             .path
     }
 
-    private func createIfNeeded(at url: URL) {
+    private func createPrivateDirectoryIfNeeded(at url: URL) {
+        let attributes: [FileAttributeKey: Any] = [
+            .posixPermissions: Self.privateDirectoryPermissions
+        ]
+
         if !fileManager.fileExists(atPath: url.path) {
-            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
+            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true, attributes: attributes)
+        } else {
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+               !isDirectory.boolValue {
+                return
+            }
         }
+
+        try? fileManager.setAttributes(attributes, ofItemAtPath: url.path)
     }
 
     private func controlSocketIdentifier(for connection: ConnectionProfile) -> String {

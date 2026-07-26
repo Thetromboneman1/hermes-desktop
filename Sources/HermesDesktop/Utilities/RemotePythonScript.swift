@@ -22,6 +22,8 @@ enum RemotePythonScript {
 
     private static let sharedHelpers = """
     import os
+    import shutil
+    import sqlite3
 
     def fail(message):
         print(json.dumps({
@@ -71,6 +73,23 @@ enum RemotePythonScript {
     def quote_text(value):
         return "'" + str(value).replace("'", "''") + "'"
 
+    def connect_sqlite_readonly(path):
+        connection = None
+        try:
+            connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            connection.execute("PRAGMA schema_version").fetchone()
+            return connection
+        except sqlite3.OperationalError as exc:
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+            message = str(exc).lower()
+            if "unable to open database file" not in message and "readonly database" not in message:
+                raise
+            return sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+
     def expand_remote_path(value, home=None, base_dir=None):
         if home is None:
             home = pathlib.Path.home()
@@ -103,6 +122,41 @@ enum RemotePythonScript {
         if env_home is not None:
             return env_home
         return home / ".hermes"
+
+    def hermes_search_path(request=None):
+        home = pathlib.Path.home()
+        hermes_home = resolved_hermes_home(request)
+        candidates = [
+            hermes_home / "hermes-agent" / "venv" / "bin",
+            home / ".local" / "bin",
+            home / ".hermes" / "hermes-agent" / "venv" / "bin",
+            home / ".cargo" / "bin",
+            pathlib.Path("/opt/homebrew/bin"),
+            pathlib.Path("/usr/local/bin"),
+        ]
+
+        entries = []
+        seen = set()
+        for candidate in candidates:
+            try:
+                entry = str(candidate)
+            except Exception:
+                continue
+            if not entry or entry in seen:
+                continue
+            seen.add(entry)
+            entries.append(entry)
+
+        env_path = os.environ.get("PATH", "")
+        if env_path:
+            entries.append(env_path)
+        return os.pathsep.join(entries)
+
+    def find_hermes_binary(request=None):
+        candidate = shutil.which("hermes", path=hermes_search_path(request))
+        if candidate:
+            return candidate
+        return None
 
     def tilde(path, home=None):
         if home is None:

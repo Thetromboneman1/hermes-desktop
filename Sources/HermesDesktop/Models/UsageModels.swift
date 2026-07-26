@@ -122,8 +122,12 @@ struct UsageProfileSlice: Identifiable, Hashable {
         cacheReadTokens + cacheWriteTokens
     }
 
+    var inputOutputTokensTotal: Int64 {
+        inputTokens + outputTokens
+    }
+
     var allTokenCategoriesTotal: Int64 {
-        inputTokens + outputTokens + cacheTokensTotal + reasoningTokens
+        inputOutputTokensTotal + cacheTokensTotal + reasoningTokens
     }
 }
 
