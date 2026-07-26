@@ -19,7 +19,7 @@ intentional_differences:
 preserved_contract:
   platform: macOS 14 or later
   package_manager: Swift Package Manager
-  transport: direct SSH
+  transport: direct SSH; preserve upstream direct-local extension during sync
   canonical_state: remote Hermes host
   local_mirror: false
 secret_references:

@@ -19,10 +19,11 @@ Run local validation with:
 scripts/validate-downstream.sh
 ```
 
-The application contract is macOS 14 or later, direct SSH to the canonical
-Hermes host, and no local mirror of remote state. The package is built with
-Swift Package Manager. GitHub Pages is deployed from `site/` after a push to
-`main`.
+The current application contract is macOS 14 or later, direct SSH access to
+the canonical Hermes host state, and no synchronized mirror. The pending
+upstream line adds direct-local transport; synchronization must preserve that
+extension as well as SSH. The package is built with Swift Package Manager.
+GitHub Pages is deployed from `site/` after a push to `main`.
 
 The only secret reference is GitHub's automatic `GITHUB_TOKEN`. Standard M365
 email delivery is not active: this public repository cannot consume the

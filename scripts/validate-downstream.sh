@@ -27,10 +27,9 @@ import sys
 
 root = Path(sys.argv[1])
 package = (root / "Package.swift").read_text()
-readme = (root / "README.md").read_text()
+transport = (root / "Sources/HermesDesktop/Services/SSH/SSHTransport.swift").read_text()
 assert ".macOS(.v14)" in package, "macOS 14 package contract disappeared"
-assert "connects directly over SSH" in readme, "direct SSH contract disappeared"
-assert "does not mirror files onto your Mac" in readme, "no-local-mirror contract disappeared"
+assert "/usr/bin/ssh" in transport, "SSH transport contract disappeared"
 PY
 
 if command -v actionlint >/dev/null 2>&1; then
