@@ -11,6 +11,9 @@
 !/docs/distribution.md
 !/docs/releases/
 !/docs/releases/*.md
+!/docs/REPOSITORY_STATE.md
+!/docs/architecture/
+!/docs/architecture/**
 /private/
 /.swiftpm-home
 /.swiftpm-cache

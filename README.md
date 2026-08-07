@@ -5,7 +5,7 @@ Native macOS companion for Hermes Agent, directly on this Mac or over SSH.
 Repository role: active downstream fork of `dodo-reach/hermes-desktop`. See
 [repository maintenance](docs/repository-maintenance.md) for upstream sync,
 validation, downstream preservation, notification status, and recovery.
-Last audited: 2026-07-26.
+Last audited: 2026-08-06.
 
 It turns the daily Hermes loop into something you can actually live in on a
 Mac: sessions, workflows, Kanban, workspace files, usage, skills, cron jobs,
@@ -517,3 +517,19 @@ From here, the work is not about adding novelty for its own sake. It is about:
 
 Anything larger than that should be justified by Hermes itself, not added just
 because it is technically possible.
+
+<!-- documentation-health:start -->
+## Current repository state
+
+![hermes-desktop system architecture](docs/architecture/hermes-desktop-system-architecture.png)
+
+- **Default branch:** `main`
+- **Implementation fingerprint:** `3d2c2694610beb4a`
+- **Detected structure:** Swift modules, Automation modules, GitHub Actions, Maintained documentation.
+- **Documentation contract:** editable diagram sources, committed PNG renderings,
+  resolved local image links, and generated state are checked on every commit.
+- **Refresh command:** `python3 scripts/documentation_health.py --write`
+
+See [repository state](docs/REPOSITORY_STATE.md) and the
+[architecture asset guide](docs/architecture/README.md).
+<!-- documentation-health:end -->
