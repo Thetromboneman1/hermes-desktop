@@ -519,6 +519,7 @@ Anything larger than that should be justified by Hermes itself, not added just
 because it is technically possible.
 
 <!-- documentation-health:start -->
+
 ## Current repository state
 
 ![hermes-desktop system architecture](docs/architecture/hermes-desktop-system-architecture.png)

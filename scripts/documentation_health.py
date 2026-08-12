@@ -416,6 +416,7 @@ def readme_section(root: Path, overview_png: Path) -> str:
     areas = detect_areas(root)
     area_summary = ", ".join(areas["implementation"] + areas["operations"])
     return f'''{MARKER_START}
+
 ## Current repository state
 
 ![{root.name} system architecture]({relative})
@@ -502,6 +503,7 @@ def write_architecture_guide(root: Path) -> None:
     path = root / "docs/architecture/README.md"
     existing = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
     contract = '''<!-- fleet-documentation-contract:start -->
+
 ## Rendering contract
 
 PNG files are the viewer-compatible diagrams embedded in repository documents.
