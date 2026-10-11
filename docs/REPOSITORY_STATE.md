@@ -1,6 +1,6 @@
 # Repository State
 
-Updated: 2026-08-18
+Updated: 2026-10-11
 
 This file is generated from the tracked repository tree. It is committed so
 the documentation record advances with implementation changes.
