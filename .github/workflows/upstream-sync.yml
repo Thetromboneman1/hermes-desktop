@@ -28,6 +28,7 @@ jobs:
       changed: ${{ steps.candidate.outputs.changed }}
       conflict: ${{ steps.candidate.outputs.conflict }}
       conflicts-b64: ${{ steps.candidate.outputs.conflicts_b64 }}
+      parents: ${{ steps.candidate.outputs.parents }}
       tree: ${{ steps.candidate.outputs.tree }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,9 +42,17 @@ jobs:
         run: |
           set -euo pipefail
           base=$(git rev-parse HEAD)
-          git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" main
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" main; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
           upstream=$(git rev-parse FETCH_HEAD)
-          changed=true; conflict=false; conflicts=""; conflicts_b64=""; tree=""
+          changed=true; conflict=false; conflicts=""; conflicts_b64=""; parents=""; tree=""
           if git merge-base --is-ancestor "$upstream" "$base"; then
             changed=false
           else
@@ -58,12 +67,13 @@ jobs:
             else
               git restore --source="$base" --staged --worktree .github/workflows
               git commit --amend --no-edit
+              parents=$(git show -s --format=%P HEAD)
               tree=$(git rev-parse 'HEAD^{tree}')
             fi
           fi
           {
             echo "base=$base"; echo "upstream=$upstream"; echo "changed=$changed"
-            echo "conflict=$conflict"; echo "tree=$tree"
+            echo "conflict=$conflict"; echo "parents=$parents"; echo "tree=$tree"
             echo "conflicts_b64=$conflicts_b64"
           } >> "$GITHUB_OUTPUT"
 
@@ -83,18 +93,29 @@ jobs:
       - name: Validate exact candidate without credentials
         env:
           BASE_SHA: ${{ needs.prepare.outputs.base }}
+          EXPECTED_PARENTS: ${{ needs.prepare.outputs.parents }}
           UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream }}
           EXPECTED_TREE: ${{ needs.prepare.outputs.tree }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ ]]
-          git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"
+          [[ "$EXPECTED_PARENTS" =~ ^[0-9a-f]{40}(\ [0-9a-f]{40})*$ ]]
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git merge --no-edit "$UPSTREAM_SHA"
           git restore --source="$BASE_SHA" --staged --worktree .github/workflows
           git commit --amend --no-edit
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_PARENTS"
           test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
           scripts/validate-downstream.sh
 
@@ -109,6 +130,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       BASE_SHA: ${{ needs.prepare.outputs.base }}
+      EXPECTED_PARENTS: ${{ needs.prepare.outputs.parents }}
       UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream }}
       EXPECTED_TREE: ${{ needs.prepare.outputs.tree }}
     steps:
@@ -121,15 +143,41 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PARENTS" =~ ^[0-9a-f]{40}(\ [0-9a-f]{40})*$ ]]
           actual=$(git ls-remote origin "refs/heads/${DOWNSTREAM_BRANCH}" | awk '{print $1}')
           test "$actual" = "$BASE_SHA"
-          git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git merge --no-edit "$UPSTREAM_SHA"
           git restore --source="$BASE_SHA" --staged --worktree .github/workflows
           git commit --amend --no-edit
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_PARENTS"
           test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          existing_prs=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=${DOWNSTREAM_BRANCH}&per_page=100" \
+            --jq '.[] | [.html_url, .base.sha, .head.repo.full_name, .head.sha] | @tsv')
+          while IFS=$'\t' read -r url pr_base head_repository head_oid; do
+            [[ -z "$url" ]] && continue
+            [[ "$pr_base" == "$BASE_SHA" && "$head_repository" == "$GITHUB_REPOSITORY" ]] || continue
+            [[ "$head_oid" =~ ^[0-9a-f]{40}$ ]]
+            commit_identity=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/git/commits/$head_oid" \
+              --jq '[.tree.sha, ([.parents[].sha] | join(" "))] | @tsv')
+            IFS=$'\t' read -r head_tree head_parents <<<"$commit_identity"
+            if [[ "$head_tree" == "$EXPECTED_TREE" && "$head_parents" == "$EXPECTED_PARENTS" ]]; then
+              echo "Existing synchronization PR: $url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done <<<"$existing_prs"
           branch="automation/upstream-sync-${UPSTREAM_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           git push --set-upstream origin "HEAD:refs/heads/$branch"
           url=$(gh pr create --head "$branch" --base "$DOWNSTREAM_BRANCH" \
