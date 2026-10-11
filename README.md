@@ -525,7 +525,7 @@ because it is technically possible.
 ![hermes-desktop system architecture](docs/architecture/hermes-desktop-system-architecture.png)
 
 - **Default branch:** `main`
-- **Implementation fingerprint:** `3d2c2694610beb4a`
+- **Implementation fingerprint:** `f560788f5e51451d`
 - **Detected structure:** Swift modules, Automation modules, GitHub Actions, Maintained documentation.
 - **Documentation contract:** editable diagram sources, committed PNG renderings,
   resolved local image links, and generated state are checked on every commit.

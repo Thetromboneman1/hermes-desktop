@@ -6,36 +6,44 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: upstream-sync-${{ github.repository }}
   cancel-in-progress: false
 
+env:
+  UPSTREAM_REPOSITORY: dodo-reach/hermes-desktop
+  DOWNSTREAM_BRANCH: main
+
 jobs:
-  sync:
-    runs-on: macos-latest
+  prepare:
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      UPSTREAM_REPOSITORY: dodo-reach/hermes-desktop
-      DOWNSTREAM_BRANCH: main
+    permissions:
+      contents: read
+    outputs:
+      base: ${{ steps.candidate.outputs.base }}
+      upstream: ${{ steps.candidate.outputs.upstream }}
+      changed: ${{ steps.candidate.outputs.changed }}
+      conflict: ${{ steps.candidate.outputs.conflict }}
+      conflicts-b64: ${{ steps.candidate.outputs.conflicts_b64 }}
+      parents: ${{ steps.candidate.outputs.parents }}
+      tree: ${{ steps.candidate.outputs.tree }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
           ref: main
-
-      - name: Resolve upstream main
-        id: upstream
+      - name: Resolve and reconstruct the downstream candidate
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          git remote add authoritative-upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          base=$(git rev-parse HEAD)
           for attempt in 1 2 3; do
-            if git fetch --no-tags authoritative-upstream main; then
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" main; then
               break
             fi
             if [[ "$attempt" == 3 ]]; then
@@ -43,123 +51,193 @@ jobs:
             fi
             sleep $((2 ** (attempt - 1)))
           done
-          upstream_sha=$(git rev-parse FETCH_HEAD)
+          upstream=$(git rev-parse FETCH_HEAD)
+          changed=true; conflict=false; conflicts=""; conflicts_b64=""; parents=""; tree=""
+          if git merge-base --is-ancestor "$upstream" "$base"; then
+            changed=false
+          else
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            set +e; git merge --no-edit "$upstream"; status=$?; set -e
+            if [[ "$status" -ne 0 ]]; then
+              changed=false; conflict=true
+              conflicts=$(git diff --name-only --diff-filter=U | head -50)
+              conflicts_b64=$(printf '%s' "$conflicts" | base64 | tr -d '\n')
+              git merge --abort
+            else
+              git restore --source="$base" --staged --worktree .github/workflows
+              git commit --amend --no-edit
+              parents=$(git show -s --format=%P HEAD)
+              tree=$(git rev-parse 'HEAD^{tree}')
+            fi
+          fi
           {
-            echo "sha=$upstream_sha"
-            echo "short=${upstream_sha:0:12}"
+            echo "base=$base"; echo "upstream=$upstream"; echo "changed=$changed"
+            echo "conflict=$conflict"; echo "parents=$parents"; echo "tree=$tree"
+            echo "conflicts_b64=$conflicts_b64"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Merge into review branch
-        id: merge
+  validate:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.prepare.outputs.base }}
+      - name: Validate exact candidate without credentials
         env:
-          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
-          SHORT_SHA: ${{ steps.upstream.outputs.short }}
+          BASE_SHA: ${{ needs.prepare.outputs.base }}
+          EXPECTED_PARENTS: ${{ needs.prepare.outputs.parents }}
+          UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream }}
+          EXPECTED_TREE: ${{ needs.prepare.outputs.tree }}
         shell: bash
         run: |
           set -euo pipefail
-          base_sha=$(git rev-parse HEAD)
-          if git merge-base --is-ancestor "$UPSTREAM_SHA" HEAD; then
-            {
-              echo "changed=false"
-              echo "conflict=false"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          branch="automation/upstream-sync-${SHORT_SHA}"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-            git fetch origin "$branch"
-            git switch --force-create "$branch" FETCH_HEAD
-            {
-              echo "changed=true"
-              echo "conflict=false"
-              echo "branch=$branch"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git switch -c "$branch"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PARENTS" =~ ^[0-9a-f]{40}(\ [0-9a-f]{40})*$ ]]
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          set +e
           git merge --no-edit "$UPSTREAM_SHA"
-          merge_status=$?
-          set -e
-          if [[ "$merge_status" -ne 0 ]]; then
-            conflicts=$(git diff --name-only --diff-filter=U | head -50)
-            {
-              echo "changed=false"
-              echo "conflict=true"
-              echo "conflicts<<EOF"
-              echo "$conflicts"
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
-            git merge --abort
-            exit 0
-          fi
-          # GITHUB_TOKEN cannot push upstream-authored workflow changes. The
-          # downstream workflow directory is a reviewed overlay, and this job
-          # provides equivalent merged-source Swift validation.
-          git restore --source="$base_sha" --staged --worktree .github/workflows
+          git restore --source="$BASE_SHA" --staged --worktree .github/workflows
           git commit --amend --no-edit
-          {
-            echo "changed=true"
-            echo "conflict=false"
-            echo "branch=$branch"
-          } >> "$GITHUB_OUTPUT"
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_PARENTS"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          scripts/validate-downstream.sh
 
-      - name: Validate merged downstream
-        if: steps.merge.outputs.changed == 'true'
-        run: scripts/validate-downstream.sh
-
-      - name: Push review branch
-        if: steps.merge.outputs.changed == 'true'
-        env:
-          BRANCH: ${{ steps.merge.outputs.branch }}
-        run: git push --set-upstream origin "$BRANCH"
-
-      - name: Open or reuse pull request
-        if: steps.merge.outputs.changed == 'true'
-        env:
-          BRANCH: ${{ steps.merge.outputs.branch }}
-          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
+  finalize:
+    needs: [prepare, validate]
+    if: needs.prepare.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_SHA: ${{ needs.prepare.outputs.base }}
+      EXPECTED_PARENTS: ${{ needs.prepare.outputs.parents }}
+      UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream }}
+      EXPECTED_TREE: ${{ needs.prepare.outputs.tree }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.base }}
+      - name: Publish exact validated tree without executing it
         shell: bash
         run: |
           set -euo pipefail
-          existing=$(gh pr list --head "$BRANCH" --base "$DOWNSTREAM_BRANCH" --state open --json url --jq '.[0].url // empty')
-          if [[ -n "$existing" ]]; then
-            echo "Existing synchronization PR: $existing" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          gh pr create \
-            --head "$BRANCH" \
-            --base "$DOWNSTREAM_BRANCH" \
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$UPSTREAM_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_PARENTS" =~ ^[0-9a-f]{40}(\ [0-9a-f]{40})*$ ]]
+          actual=$(git ls-remote origin "refs/heads/${DOWNSTREAM_BRANCH}" | awk '{print $1}')
+          test "$actual" = "$BASE_SHA"
+          for attempt in 1 2 3; do
+            if git fetch --no-tags "https://github.com/${UPSTREAM_REPOSITORY}.git" "$UPSTREAM_SHA"; then
+              break
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              exit 1
+            fi
+            sleep $((2 ** (attempt - 1)))
+          done
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git merge --no-edit "$UPSTREAM_SHA"
+          git restore --source="$BASE_SHA" --staged --worktree .github/workflows
+          git commit --amend --no-edit
+          test "$(git show -s --format=%P HEAD)" = "$EXPECTED_PARENTS"
+          test "$(git rev-parse 'HEAD^{tree}')" = "$EXPECTED_TREE"
+          existing_prs=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls?state=open&base=${DOWNSTREAM_BRANCH}&per_page=100" \
+            --jq '.[] | [.html_url, .base.sha, .head.repo.full_name, .head.sha] | @tsv')
+          while IFS=$'\t' read -r url pr_base head_repository head_oid; do
+            [[ -z "$url" ]] && continue
+            [[ "$pr_base" == "$BASE_SHA" && "$head_repository" == "$GITHUB_REPOSITORY" ]] || continue
+            [[ "$head_oid" =~ ^[0-9a-f]{40}$ ]]
+            commit_identity=$(gh api \
+              "repos/${GITHUB_REPOSITORY}/git/commits/$head_oid" \
+              --jq '[.tree.sha, ([.parents[].sha] | join(" "))] | @tsv')
+            IFS=$'\t' read -r head_tree head_parents <<<"$commit_identity"
+            if [[ "$head_tree" == "$EXPECTED_TREE" && "$head_parents" == "$EXPECTED_PARENTS" ]]; then
+              echo "Existing synchronization PR: $url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          done <<<"$existing_prs"
+          branch="automation/upstream-sync-${UPSTREAM_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          published_head=$(git rev-parse HEAD)
+          git push --set-upstream origin "HEAD:refs/heads/$branch"
+          cleanup_created_pr() {
+            status=$?
+            trap - ERR
+            set +e
+            gh pr close "$url" --delete-branch --comment \
+              "Closed automatically because its validated identity could not be confirmed."
+            cleanup_status=$?
+            set -e
+            if [[ "$cleanup_status" -ne 0 ]]; then
+              echo "::error::Failed to close unverified pull request $url"
+            fi
+            exit "$status"
+          }
+          url=$(gh pr create --head "$branch" --base "$DOWNSTREAM_BRANCH" \
             --title "chore: sync dodo-reach/hermes-desktop main" \
-            --body "Merges \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`, preserves the downstream manifest, and runs the Swift test suite."
+            --body "Merges \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`, preserves the downstream workflow overlay, and validates the Swift contract from base \`${BASE_SHA}\`.")
+          trap cleanup_created_pr ERR
+          pr_record=$(gh pr view "$url" --json baseRefOid,headRefOid \
+            --jq '[.baseRefOid, .headRefOid] | @tsv')
+          IFS=$'\t' read -r pr_base pr_head <<<"$pr_record"
+          if [[ "$pr_base" != "$BASE_SHA" || "$pr_head" != "$published_head" ]]; then
+            false
+          fi
+          created_identity=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/commits/$pr_head" \
+            --jq '[.tree.sha, ([.parents[].sha] | join(" "))] | @tsv')
+          IFS=$'\t' read -r created_tree created_parents <<<"$created_identity"
+          if [[ "$created_tree" != "$EXPECTED_TREE" || "$created_parents" != "$EXPECTED_PARENTS" ]]; then
+            false
+          fi
+          trap - ERR
 
+  report-conflict:
+    needs: prepare
+    if: needs.prepare.outputs.conflict == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM_SHA: ${{ needs.prepare.outputs.upstream }}
+      CONFLICTS_B64: ${{ needs.prepare.outputs.conflicts-b64 }}
+    steps:
       - name: Record merge conflict
-        if: steps.merge.outputs.conflict == 'true'
-        env:
-          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
-          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
         shell: bash
         run: |
           set -euo pipefail
+          conflicts=$(printf '%s' "$CONFLICTS_B64" | base64 --decode)
           title="Hermes Desktop upstream sync conflict"
           body_file="$RUNNER_TEMP/hermes-desktop-upstream-conflict.md"
-          {
-            echo "The review merge stopped without changing \`${DOWNSTREAM_BRANCH}\`."
-            echo
-            echo "- Upstream: \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`"
-            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-            echo
-            echo '```text'
-            echo "$CONFLICTS"
-            echo '```'
-          } > "$body_file"
+          # Markdown backticks are intentionally literal.
+          # shellcheck disable=SC2016
+          printf 'The review merge stopped without changing `%s`.\n\n- Upstream: `%s@%s`\n\n```text\n%s\n```\n' \
+            "$DOWNSTREAM_BRANCH" "$UPSTREAM_REPOSITORY" "$UPSTREAM_SHA" "$conflicts" > "$body_file"
           issue_number=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')
-          if [[ -n "$issue_number" ]]; then
-            gh issue comment "$issue_number" --body-file "$body_file"
-          else
-            gh issue create --title "$title" --body-file "$body_file"
-          fi
+          if [[ -n "$issue_number" ]]; then gh issue comment "$issue_number" --body-file "$body_file"; else gh issue create --title "$title" --body-file "$body_file"; fi
           cat "$body_file" >> "$GITHUB_STEP_SUMMARY"
           exit 1

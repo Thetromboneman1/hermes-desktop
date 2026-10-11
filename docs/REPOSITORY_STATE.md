@@ -1,13 +1,13 @@
 # Repository State
 
-Updated: 2026-08-18
+Updated: 2026-10-11
 
 This file is generated from the tracked repository tree. It is committed so
 the documentation record advances with implementation changes.
 
 - Repository: `Thetromboneman1/hermes-desktop`
 - Default branch: `main`
-- Implementation fingerprint: `3d2c2694610beb4a`
+- Implementation fingerprint: `f560788f5e51451d`
 - Maintained documents: 35
 - Architecture assets: 2
 
