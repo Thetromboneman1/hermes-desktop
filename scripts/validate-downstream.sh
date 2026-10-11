@@ -39,11 +39,19 @@ reuse = 'existing_prs=$(gh api --paginate'
 identity = 'commit_identity=$(gh api'
 push = 'git push --set-upstream origin "HEAD:refs/heads/$branch"'
 create = 'url=$(gh pr create --head "$branch" --base "$DOWNSTREAM_BRANCH"'
+published = 'published_head=$(git rev-parse HEAD)'
+verify_created = 'if [[ "$pr_base" != "$BASE_SHA" || "$pr_head" != "$published_head" ]]'
+cleanup = 'trap cleanup_created_pr ERR'
+disarm = 'trap - ERR'
 assert reuse in workflow and identity in workflow, "PR reuse must verify exact candidate provenance"
+assert published in workflow and verify_created in workflow, "new PRs must retain the exact validated head"
+assert workflow.index(create) < workflow.index(cleanup) < workflow.rindex(disarm), (
+    "created PR verification must retain cleanup until the full identity is confirmed"
+)
 assert workflow.count('test "$(git show -s --format=%P HEAD)" = "$EXPECTED_PARENTS"') == 2, (
     "validation and finalization must verify exact candidate parents"
 )
-assert workflow.index(reuse) < workflow.index(push) < workflow.index(create), (
+assert workflow.index(reuse) < workflow.index(published) < workflow.index(push) < workflow.index(create), (
     "an existing exact-candidate PR must be reused before creating another"
 )
 PY

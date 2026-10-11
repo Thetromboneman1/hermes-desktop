@@ -179,14 +179,39 @@ jobs:
             fi
           done <<<"$existing_prs"
           branch="automation/upstream-sync-${UPSTREAM_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          published_head=$(git rev-parse HEAD)
           git push --set-upstream origin "HEAD:refs/heads/$branch"
+          cleanup_created_pr() {
+            status=$?
+            trap - ERR
+            set +e
+            gh pr close "$url" --delete-branch --comment \
+              "Closed automatically because its validated identity could not be confirmed."
+            cleanup_status=$?
+            set -e
+            if [[ "$cleanup_status" -ne 0 ]]; then
+              echo "::error::Failed to close unverified pull request $url"
+            fi
+            exit "$status"
+          }
           url=$(gh pr create --head "$branch" --base "$DOWNSTREAM_BRANCH" \
             --title "chore: sync dodo-reach/hermes-desktop main" \
             --body "Merges \`${UPSTREAM_REPOSITORY}@${UPSTREAM_SHA}\`, preserves the downstream workflow overlay, and validates the Swift contract from base \`${BASE_SHA}\`.")
-          if [[ "$(gh pr view "$url" --json baseRefOid --jq .baseRefOid)" != "$BASE_SHA" ]]; then
-            gh pr close "$url" --delete-branch --comment "Closed automatically because the base branch advanced after validation."
-            exit 1
+          trap cleanup_created_pr ERR
+          pr_record=$(gh pr view "$url" --json baseRefOid,headRefOid \
+            --jq '[.baseRefOid, .headRefOid] | @tsv')
+          IFS=$'\t' read -r pr_base pr_head <<<"$pr_record"
+          if [[ "$pr_base" != "$BASE_SHA" || "$pr_head" != "$published_head" ]]; then
+            false
           fi
+          created_identity=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/git/commits/$pr_head" \
+            --jq '[.tree.sha, ([.parents[].sha] | join(" "))] | @tsv')
+          IFS=$'\t' read -r created_tree created_parents <<<"$created_identity"
+          if [[ "$created_tree" != "$EXPECTED_TREE" || "$created_parents" != "$EXPECTED_PARENTS" ]]; then
+            false
+          fi
+          trap - ERR
 
   report-conflict:
     needs: prepare
